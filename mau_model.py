@@ -6,10 +6,16 @@ import numpy as np
 os.chdir('C:/Users/obriene/Projects/MAU_model/outputs')
 
 class params():
+    #run times and iterations
     warm_up = 30
     run_time = 2400
     iterations = 10
+    #resources
     no_mau_beds = 52
+    #timings
+    #split probabilities
+    hosp_adm_prob = 0.79
+    #empty list for results
     results = []
 
 class spawn_patient:
@@ -26,7 +32,7 @@ class mau_model:
         #establish resources
         self.mau_bed = simpy.Resource(self.env, capacity=params.no_mau_beds)
 
-    def generate_ed_arrivals(self):
+    def generate_mau_arrivals(self):
         while True:
             #up patient counter and spawn a new patient
             self.patient_counter += 1
