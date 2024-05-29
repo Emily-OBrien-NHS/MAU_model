@@ -91,6 +91,14 @@ wlkin_df['DateShifted'] = wlkin_df['ArrivalDateTime'].shift(-1)
 wlkin_df['TimeBetweenArrivals'] = (wlkin_df['DateShifted'] - wlkin_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
 print(f'Average time between walk in arrivals is {wlkin_df['TimeBetweenArrivals'].mean():.0f} minutes')
 
+#Non-ed MAU admissions
+merged = ed_df.loc[~ed_df['AdmitPrvspRefno'].isna()].merge(mau_df, on='AdmitPrvspRefno', how='outer')
+merged = merged.loc[merged['ArrivalDateTime'].isnull(),
+                    ['MAUStart', 'DischRoute']].sort_values(by='MAUStart')
+merged['DateShifted'] = merged['MAUStart'].shift(-1)
+merged['TimeBetweenArrivals'] = (merged['DateShifted'] - merged['MAUStart']) / pd.Timedelta(minutes=1)
+print(f'Average time between non-ED MAU arrivals is {merged['TimeBetweenArrivals'].mean():.0f} minutes')
+
 #Average time in ED until DTA
 ed_df['TimeToDTA'] = (ed_df['DecidedToAdmitDateTime'] - ed_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
 print(f'Average time in ED until DTA is {ed_df['TimeToDTA'].mean():.0f} minutes')
