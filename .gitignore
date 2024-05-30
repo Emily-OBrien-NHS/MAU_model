@@ -6,3 +6,6 @@
 
 # any csv files
 *.csv
+
+#any pptx files
+*.pptx

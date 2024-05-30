@@ -19,10 +19,8 @@ class params():
 
     scenario_name = 'baseline'
     #run times and iterations
-    warm_up = 0
     run_time = 525600
-    #run_time = 1000
-    iterations = 1
+    iterations = 10
     #times of processes
     mean_amb_arr = 18
     mean_walk_arr = 7
@@ -69,6 +67,10 @@ class spawn_patient:
         self.note = ''
 
         self.mau_occ_when_queue_joined = np.nan
+
+        self.split1 = np.nan
+        self.split2 = np.nan
+        self.split3 = np.nan
 
 
 class mau_model:
@@ -169,8 +171,10 @@ class mau_model:
         #Where does patient go on to from the MAU
         if patient.mau_disc:
             patient.note = 'Discharged from MAU'
+            patient.split3 = 'Discharged'
         else:
             patient.note = 'Admitted to Specialty Ward'
+            patient.split3 = 'Specialty Ward'
 
         self.store_patient_results(patient)
 
@@ -188,11 +192,15 @@ class mau_model:
         #Decide if patient is discharged from ED, or admitted
         if patient.ed_disc:
             patient.note = 'Discharged from ED'
+            patient.split1 = 'Discharged'
         else:
+            patient.split1 = 'Admitted'
             #If patient is admitted, are they admited to MAU or elsewhere
             if patient.dta_admit_elsewhere:
                 patient.note = 'Admitted elsewhere'
+                patient.split2 = 'Elsewhere'
             else:
+                patient.split2 = 'MAU'
                 #Patient begins wait for mau bed
                 patient.enter_mau_queue = self.env.now
                 patient.mau_occ_when_queue_joined = self.mau_bed.count
@@ -209,8 +217,10 @@ class mau_model:
                 #Record where the patient goes after MAU
                 if patient.mau_disc:
                     patient.note = 'Discharged from MAU'
+                    patient.split3 = 'Discharged'
                 else:
                     patient.note = 'Admitted to Specialty Ward'
+                    patient.split3 = 'Specialty Ward'
 
         self.store_patient_results(patient)
     
@@ -218,7 +228,8 @@ class mau_model:
     def store_patient_results(self, patient):
         params.patient_results.append([self.run_number, patient.id, patient.arrival, patient.ed_arrival_time,
                                patient.ed_leave_time, patient.enter_mau_queue, patient.leave_mau_queue,
-                               patient.leave_mau, patient.note, patient.mau_occ_when_queue_joined])
+                               patient.leave_mau, patient.note, patient.mau_occ_when_queue_joined,
+                               patient.split1, patient.split2, patient.split3])
         
     def store_mau_occupancy(self):
         while True:
@@ -234,7 +245,7 @@ class mau_model:
         self.env.process(self.generate_ambulance_ed_arrivals())
         self.env.process(self.generate_non_ed_mau_arrivals())
         self.env.process(self.store_mau_occupancy())
-        self.env.run(until=(params.warm_up + params.run_time))
+        self.env.run(until=(params.run_time))
 
 class run_the_model:
     #run the model for the number of iterations specified
@@ -247,7 +258,8 @@ class run_the_model:
     df = pd.DataFrame(params.patient_results,
                       columns= ['run', 'patient ID', 'ED arrival type', 'ED arrival time',
                                 'ED leave time', 'enter MAU queue', 'leave MAU queue',
-                                'leave MAU', 'note', 'MAU occ when queue joined']).sort_values(by='patient ID')
+                                'leave MAU', 'note', 'MAU occ when queue joined',
+                                'split1', 'split2', 'split3']).sort_values(by=['run', 'patient ID'])
     df['simulation arrival time'] = df['ED arrival time'].fillna(df['enter MAU queue'])
     df['simulation arrival day'] = pd.cut(df['simulation arrival time'],
                                   bins=365, labels=np.linspace(1,365,365))
@@ -257,34 +269,12 @@ class run_the_model:
 
     df = df[['run', 'patient ID', 'simulation arrival time', 'simulation arrival day', 'ED arrival type',
              'ED arrival time', 'ED leave time', 'time in ED', 'enter MAU queue', 'leave MAU queue',
-             'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU', 'note']].copy()
-
+             'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU', 'note',
+             'split1', 'split2', 'split3']].copy()
     df.to_csv(params.scenario_name + ' mau patients.csv', index=False)
     
     mau_occ_df = pd.DataFrame(params.mau_occupancy_results,
                               columns=['run', 'time', 'beds occupied', 'queue length'])
+    mau_occ_df['day'] = pd.cut(mau_occ_df['time'], bins=365, labels=np.linspace(1,365,365))
+    print(mau_occ_df)
     mau_occ_df.to_csv(params.scenario_name + ' mau occupancy.csv', index=False)
-
-#    random test code
-
-    df.dropna(subset='time in MAU queue').plot(x='simulation arrival day', y='time in MAU queue', kind='scatter')
-    mau_occ_df.plot(x='time', y='beds occupied')
-
-
-    p = df[['patient ID', 'simulation arrival day', 'enter MAU queue', 'leave MAU queue',
-        'leave MAU', 'MAU Queue', 'note']].copy()
-    p = p.sort_values(by='enter MAU queue').dropna(subset = 'enter MAU queue')
-    p['diff in queue arr'] = abs(p['enter MAU queue'].shift(1) - p['enter MAU queue'])
-    print(f'Average time between patients joining the MAU queue is {p['diff in queue arr'].mean():.2f} minutes')
-
-    r = df[['patient ID', 'simulation arrival day', 'enter MAU queue', 'leave MAU queue',
-        'leave MAU', 'MAU Queue', 'note']].copy()
-    r = r.sort_values(by='leave MAU queue').dropna(subset = 'leave MAU queue')
-    r['diff in queue leave'] = abs(r['leave MAU queue'].shift(1) - r['leave MAU queue'])
-    print(f'Average time between patients being admitted into the MAU is {r['diff in queue leave'].mean():.2f} minutes')
-
-    q = df[['patient ID', 'simulation arrival day', 'enter MAU queue', 'leave MAU queue',
-        'leave MAU', 'MAU Queue', 'note']].copy()
-    q = q.sort_values(by='leave MAU').dropna(subset = 'leave MAU')
-    q['diff in MAU disc'] = abs(q['leave MAU'].shift(1) - q['leave MAU'])
-    print(f'Average time between patients leaving the MAU {q['diff in MAU disc'].mean():.2f} minutes')
