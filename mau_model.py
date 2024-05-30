@@ -8,6 +8,15 @@ import matplotlib.pyplot as plt
 os.chdir('C:/Users/obriene/Projects/MAU model/outputs')
 
 class params():
+    def log_normal_transform(mu, sigma):
+        #function to take the mean and standard deviation of a series
+        #and convert then into the mu and sigma inputes required
+        #to use a log normal distribution for randomly generating
+        #patient times.
+        input_mu = np.log((mu**2) / ((mu**2 + sigma**2)**0.5))
+        input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
+        return input_mu, input_sigma
+
     scenario_name = 'baseline'
     #run times and iterations
     warm_up = 0
@@ -19,7 +28,11 @@ class params():
     mean_walk_arr = 7
     mean_other_mau_arr = 751
     mean_ed = 283
+    std_ed = 246
+    mu_ed, sigma_ed = log_normal_transform(mean_ed, std_ed)
     mean_mau = 1784
+    std_mau = 2224
+    mu_mau, sigma_mau = log_normal_transform(mean_mau, std_mau)
     #resources
     no_mau_beds = 52
     #split probabilities
@@ -66,7 +79,7 @@ class mau_model:
         self.run_number = run_number
         self.init_bed = 0
         #establish resources
-        self.ed = simpy.Resource(self.env, capacity=10000000000) 
+        self.ed = simpy.Resource(self.env, capacity=np.inf) 
         self.mau_bed = simpy.PriorityResource(self.env, capacity=params.no_mau_beds)
 
     ##################FILL MAU AT START OF RUN####################
@@ -85,9 +98,11 @@ class mau_model:
         with self.mau_bed.request(priority=-1) as req:
             yield req
             patient.leave_mau_queue = self.env.now
-            #randomly sample the time spent in an MAU bed
-            sampled_mau_duration = random.expovariate(1.0 / params.mean_mau)
-            yield self.env.timeout(sampled_mau_duration)
+            #randomly sample the time spent in an MAU bed, pause for that
+            #plus twice the ED time, to allow a queue to build up before
+            #initial patients start leaving.
+            sampled_mau_duration = random.lognormvariate(params.mu_mau, params.sigma_mau)
+            yield self.env.timeout((sampled_mau_duration + 2*params.mean_ed))
         patient.leave_mau = self.env.now
         patient.note = 'filler patient'
         self.store_patient_results(patient)
@@ -146,7 +161,8 @@ class mau_model:
             #record how long the patient was in the MAU queue
             patient.leave_mau_queue = self.env.now
             #randomly sample the time spent in an MAU bed
-            sampled_mau_duration = random.expovariate(1.0 / params.mean_mau)
+            sampled_mau_duration = random.lognormvariate(params.mu_mau, params.sigma_mau)
+            #sampled_mau_duration = random.expovariate(1.0 / params.mean_mau)
             yield self.env.timeout(sampled_mau_duration)
         patient.leave_mau = self.env.now
 
@@ -165,7 +181,7 @@ class mau_model:
         with self.ed.request() as req:
             yield req
             #randomly sample the time spent in ED
-            sampled_ed_time = random.expovariate(1.0 / params.mean_ed)
+            sampled_ed_time = random.lognormvariate(params.mu_ed, params.sigma_ed)
             yield self.env.timeout(sampled_ed_time)
         patient.ed_leave_time = self.env.now
 
@@ -186,7 +202,7 @@ class mau_model:
                     #record how long the patient was in the MAU queue
                     patient.leave_mau_queue = self.env.now
                     #randomly sample the time spent in an MAU bed
-                    sampled_mau_duration = random.expovariate(1.0 / params.mean_mau)
+                    sampled_mau_duration = random.lognormvariate(params.mu_mau, params.sigma_mau)
                     yield self.env.timeout(sampled_mau_duration)
                 
                 patient.leave_mau = self.env.now
@@ -231,42 +247,44 @@ class run_the_model:
     df = pd.DataFrame(params.patient_results,
                       columns= ['run', 'patient ID', 'ED arrival type', 'ED arrival time',
                                 'ED leave time', 'enter MAU queue', 'leave MAU queue',
-                                'leave MAU', 'note', 'MAU occupancy when queue joined']).sort_values(by='patient ID')
+                                'leave MAU', 'note', 'MAU occ when queue joined']).sort_values(by='patient ID')
     df['simulation arrival time'] = df['ED arrival time'].fillna(df['enter MAU queue'])
     df['simulation arrival day'] = pd.cut(df['simulation arrival time'],
                                   bins=365, labels=np.linspace(1,365,365))
-    df['ED time'] = df['ED leave time'] - df['ED arrival time']
-    df['MAU Queue'] = df['leave MAU queue'] - df['enter MAU queue']
-    #df.to_csv('C:/Users/obriene/Projects/MAU model/outputs/' + params.scenario_name + ' mau patients.csv',
-     #         index=False)
+    df['time in ED'] = df['ED leave time'] - df['ED arrival time']
+    df['time in MAU queue'] = df['leave MAU queue'] - df['enter MAU queue']
+    df['time in MAU'] = df['leave MAU'] - df['leave MAU queue']
+
+    df = df[['run', 'patient ID', 'simulation arrival time', 'simulation arrival day', 'ED arrival type',
+             'ED arrival time', 'ED leave time', 'time in ED', 'enter MAU queue', 'leave MAU queue',
+             'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU', 'note']].copy()
+
+    df.to_csv(params.scenario_name + ' mau patients.csv', index=False)
     
     mau_occ_df = pd.DataFrame(params.mau_occupancy_results,
                               columns=['run', 'time', 'beds occupied', 'queue length'])
-  #  mau_occ_df.to_csv('C:/Users/obriene/Projects/MAU model/outputs/' + params.scenario_name + ' mau occupancy.csv',
-   #           index=False)
+    mau_occ_df.to_csv(params.scenario_name + ' mau occupancy.csv', index=False)
 
-#    x=5
+#    random test code
 
-    df.dropna(subset='MAU Queue').plot(x='simulation arrival day', y='MAU Queue', kind='scatter')
+    df.dropna(subset='time in MAU queue').plot(x='simulation arrival day', y='time in MAU queue', kind='scatter')
     mau_occ_df.plot(x='time', y='beds occupied')
 
 
     p = df[['patient ID', 'simulation arrival day', 'enter MAU queue', 'leave MAU queue',
         'leave MAU', 'MAU Queue', 'note']].copy()
-    p = p.sort_values(by='enter MAU queue')
+    p = p.sort_values(by='enter MAU queue').dropna(subset = 'enter MAU queue')
     p['diff in queue arr'] = abs(p['enter MAU queue'].shift(1) - p['enter MAU queue'])
     print(f'Average time between patients joining the MAU queue is {p['diff in queue arr'].mean():.2f} minutes')
 
     r = df[['patient ID', 'simulation arrival day', 'enter MAU queue', 'leave MAU queue',
         'leave MAU', 'MAU Queue', 'note']].copy()
-    r = r.sort_values(by='leave MAU queue')
+    r = r.sort_values(by='leave MAU queue').dropna(subset = 'leave MAU queue')
     r['diff in queue leave'] = abs(r['leave MAU queue'].shift(1) - r['leave MAU queue'])
     print(f'Average time between patients being admitted into the MAU is {r['diff in queue leave'].mean():.2f} minutes')
 
     q = df[['patient ID', 'simulation arrival day', 'enter MAU queue', 'leave MAU queue',
         'leave MAU', 'MAU Queue', 'note']].copy()
-    q = q.sort_values(by='leave MAU')
+    q = q.sort_values(by='leave MAU').dropna(subset = 'leave MAU')
     q['diff in MAU disc'] = abs(q['leave MAU'].shift(1) - q['leave MAU'])
     print(f'Average time between patients leaving the MAU {q['diff in MAU disc'].mean():.2f} minutes')
-
-

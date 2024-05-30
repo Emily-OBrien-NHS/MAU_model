@@ -102,10 +102,12 @@ print(f'Average time between non-ED MAU arrivals is {merged['TimeBetweenArrivals
 #Average time in ED until DTA
 ed_df['TimeToDTA'] = (ed_df['DecidedToAdmitDateTime'] - ed_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
 print(f'Average time in ED until DTA is {ed_df['TimeToDTA'].mean():.0f} minutes')
+print(f'Standard Deviation time in ED until DTA is {ed_df['TimeToDTA'].std():.0f} minutes')
 
 #average time spent in MAU
 mau_df['MAU Time'] = (mau_df['MAUEnd'] - mau_df['MAUStart']) / pd.Timedelta(minutes=1)
 print(f'Average time spent in MAU is {round(mau_df['MAU Time'].mean())} minutes')
+print(f'Standard Deviation time in ED until DTA is {mau_df['MAU Time'].std():.0f} minutes')
 
 #Proportion of ED patients who get discharged
 prop = ed_df['AdmitPrvspRefno'].notnull().value_counts(normalize=True)
