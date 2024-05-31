@@ -33,6 +33,8 @@ class params():
     mu_mau, sigma_mau = log_normal_transform(mean_mau, std_mau)
     #resources
     no_mau_beds = 52
+    #Initial capacities
+    init_ed_capacity = 80
     #split probabilities
     ed_disc_prob = 0.64
     dta_admit_elsewhere_prob = 0.67
@@ -79,12 +81,27 @@ class mau_model:
         self.env = simpy.Environment()
         self.patient_counter = 0
         self.run_number = run_number
+        #Counters for initial filling of ED and MAU
+        self.init_ed = 0
         self.init_bed = 0
         #establish resources
         self.ed = simpy.Resource(self.env, capacity=np.inf) 
         self.mau_bed = simpy.PriorityResource(self.env, capacity=params.no_mau_beds)
 
-    ##################FILL MAU AT START OF RUN####################
+    ##################FILL ED AND MAU AT START OF RUN####################
+    #ED
+    def generate_initial_ed_patients(self):
+        #request an MAU bed at time 0 until all mau beds are filled
+        while self.init_ed < params.init_ed_capacity:
+            fill_patient = spawn_patient(0, params.ed_disc_prob,
+                                         params.dta_admit_elsewhere_prob,
+                                         params.mau_disc_prob)
+            fill_patient.arrival = 'ED filler patient'
+            self.env.process(self.ed_to_mau_journey(fill_patient))
+            self.init_ed += 1
+            yield self.env.timeout(0)
+
+    #MAU
     def generate_initial_mau_patients(self):
         #request an MAU bed at time 0 until all mau beds are filled
         while self.init_bed < params.no_mau_beds:
@@ -106,7 +123,7 @@ class mau_model:
             sampled_mau_duration = random.lognormvariate(params.mu_mau, params.sigma_mau)
             yield self.env.timeout((sampled_mau_duration + 2*params.mean_ed))
         patient.leave_mau = self.env.now
-        patient.note = 'filler patient'
+        patient.note = 'MAU filler patient'
         self.store_patient_results(patient)
 
     ##########ARRIVALS##########
@@ -231,20 +248,22 @@ class mau_model:
                                patient.leave_mau, patient.note, patient.mau_occ_when_queue_joined,
                                patient.split1, patient.split2, patient.split3])
         
-    def store_mau_occupancy(self):
+    def store_occupancy(self):
         while True:
             params.mau_occupancy_results.append([self.run_number, self.mau_bed._env.now,
-                                                 self.mau_bed.count, len(self.mau_bed.queue)])
+                                                 self.mau_bed.count, len(self.mau_bed.queue),
+                                                 self.ed.count])
             yield self.env.timeout(60)
 
     ########################RUN#######################
     def run(self):
         #Run process for the run time specified
+        self.env.process(self.generate_initial_ed_patients())
         self.env.process(self.generate_initial_mau_patients())
         self.env.process(self.generate_walkin_ed_arrivals())
         self.env.process(self.generate_ambulance_ed_arrivals())
         self.env.process(self.generate_non_ed_mau_arrivals())
-        self.env.process(self.store_mau_occupancy())
+        self.env.process(self.store_occupancy())
         self.env.run(until=(params.run_time))
 
 class run_the_model:
@@ -255,26 +274,28 @@ class run_the_model:
         model.run()
 
     #put full results into a dataframe and export to csv
-    df = pd.DataFrame(params.patient_results,
+    patient_df = pd.DataFrame(params.patient_results,
                       columns= ['run', 'patient ID', 'ED arrival type', 'ED arrival time',
                                 'ED leave time', 'enter MAU queue', 'leave MAU queue',
                                 'leave MAU', 'note', 'MAU occ when queue joined',
                                 'split1', 'split2', 'split3']).sort_values(by=['run', 'patient ID'])
-    df['simulation arrival time'] = df['ED arrival time'].fillna(df['enter MAU queue'])
-    df['simulation arrival day'] = pd.cut(df['simulation arrival time'],
+    patient_df['simulation arrival time'] = patient_df['ED arrival time'].fillna(patient_df['enter MAU queue'])
+    patient_df['simulation arrival day'] = pd.cut(patient_df['simulation arrival time'],
                                   bins=365, labels=np.linspace(1,365,365))
-    df['time in ED'] = df['ED leave time'] - df['ED arrival time']
-    df['time in MAU queue'] = df['leave MAU queue'] - df['enter MAU queue']
-    df['time in MAU'] = df['leave MAU'] - df['leave MAU queue']
+    patient_df['time in ED'] = patient_df['ED leave time'] - patient_df['ED arrival time']
+    patient_df['time in MAU queue'] = patient_df['leave MAU queue'] - patient_df['enter MAU queue']
+    patient_df['time in MAU'] = patient_df['leave MAU'] - patient_df['leave MAU queue']
 
-    df = df[['run', 'patient ID', 'simulation arrival time', 'simulation arrival day', 'ED arrival type',
+    patient_df = patient_df[['run', 'patient ID', 'simulation arrival time', 'simulation arrival day', 'ED arrival type',
              'ED arrival time', 'ED leave time', 'time in ED', 'enter MAU queue', 'leave MAU queue',
              'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU', 'note',
              'split1', 'split2', 'split3']].copy()
-    df.to_csv(params.scenario_name + ' mau patients.csv', index=False)
+    patient_df.to_csv(params.scenario_name + ' mau patients.csv', index=False)
     
-    mau_occ_df = pd.DataFrame(params.mau_occupancy_results,
-                              columns=['run', 'time', 'beds occupied', 'queue length'])
-    mau_occ_df['day'] = pd.cut(mau_occ_df['time'], bins=365, labels=np.linspace(1,365,365))
-    print(mau_occ_df)
-    mau_occ_df.to_csv(params.scenario_name + ' mau occupancy.csv', index=False)
+    occ_df = pd.DataFrame(params.mau_occupancy_results,
+                              columns=['run', 'time', 'MAU beds occupied', 'MAU queue length',
+                                       'ED Occupancy'])
+    occ_df['day'] = pd.cut(occ_df['time'], bins=365, labels=np.linspace(1,365,365))
+    occ_df.to_csv(params.scenario_name + ' mau occupancy.csv', index=False)
+
+    x=5
