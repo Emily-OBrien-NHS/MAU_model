@@ -17,7 +17,7 @@ class params():
         input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
         return input_mu, input_sigma
 
-    scenario_name = 'baseline'
+    scenario_name = 'Baseline'
     #run times and iterations
     run_time = 525600
     iterations = 10
