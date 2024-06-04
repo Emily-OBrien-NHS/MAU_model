@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 os.chdir('C:/Users/obriene/Projects/MAU model/outputs')
 
-scenario_name = 'Double MAU LoS'
+scenario_name = 'Baseline'
 patient_df = pd.read_csv(scenario_name + ' mau patients.csv')
 occ_df = pd.read_csv(scenario_name + ' mau occupancy.csv')
 
@@ -30,7 +30,7 @@ for run in patient_df['run'].drop_duplicates().values:
     fig2.savefig(f'Run {run} ED Occupancy.png')
     plt.close(fig2)
     #Number of patients in MAU Queue
-    ax3 = run_n.plot(x='time', y='MAU queue length', title='MAU Queue',
+    ax3 = run_n.plot(x='time', y='MAU queue length', title='Number of Patients in MAU Queue',
             xlabel='time (minutes)', ylabel='Number of Patients in Queue')
     fig3 = ax3.get_figure()
     fig3.savefig(f'Run {run} Number of patients in MAU Queue.png')
@@ -94,7 +94,7 @@ fig10 = ax10.get_figure()
 fig10.savefig('Average ED Occupancy.png')
 plt.close(fig10)
 #Number of patients in MAU Queue
-ax11 = av_occ.plot(x='time', y='MAU queue length', title='MAU Queue',
+ax11 = av_occ.plot(x='time', y='MAU queue length', title='Number of Patients in MAU Queue',
        xlabel='time (minutes)', ylabel='Number of Patients in Queue')
 fig11 = ax11.get_figure()
 fig11.savefig('Average Number of patients in MAU Queue.png')
@@ -143,3 +143,20 @@ occ_averages = (occ_df.groupby('run').mean(numeric_only=True)
                 ._append(occ_df.mean(numeric_only=True).rename('average'))
                 [['MAU beds occupied', 'MAU queue length', 'ED Occupancy']])
 patient_averages.join(occ_averages).to_csv('Averages.csv')
+
+
+#plots for actual vs simulated time distributions.  Need to read in the data
+#from mau_paramters to run.
+#sim = patient_df.loc[patient_df['run'] == 0, 'time in ED'].tolist()
+#act = ed_df['TimeToDTA'].dropna().clip(lower=0).tolist()
+#plt.hist(sim, label='simulated time', bins=75, color='orange')
+#plt.hist(act, label='actual time', bins=75, color='blue')
+#plt.legend()
+#plt.title('Actual vs Simulated time in ED')
+
+#act = mau_df['MAU Time'].tolist()
+#sim = patient_df.loc[patient_df['run'] == 0, 'time in MAU'].tolist()
+#plt.hist(act, label='actual time', bins=75, color='blue')
+#plt.hist(sim, label='simulated time', bins=75, color='orange')
+#plt.legend()
+#plt.title('Actual vs Simulated time in MAU')
