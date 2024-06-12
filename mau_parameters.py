@@ -68,8 +68,35 @@ SELECT [ArrivalDateTime]
   AND IsNewAttendance = 'Y'
 """
 
+discharge_query = """SET NOCOUNT ON
+---Get MAU spells
+SELECT prvsp_refno
+INTO #MAUStay
+FROM [PiMSMarts].[dbo].[ip_movements]
+WHERE move_reason_sp = 's'
+AND sstay_ward_code IN ('RK950MAU','RK950AMW')
+AND sstay_end_dttm BETWEEN '01-Apr-2023 00:00:00' AND '31-Mar-2024 00:00:00'
+GROUP BY prvsp_refno
+
+
+-----Join to ipdc view to find discharging specialties
+SELECT  spec.local_spec_desc
+      ,COUNT(fce_end_ward) AS 'count'
+FROM [InfoDB].[dbo].[vw_ipdc_fces_pfmgt] ipdc
+LEFT JOIN [InfoDB].[dbo].[vw_cset_specialties] spec
+ON ipdc.local_spec = spec.local_spec
+INNER JOIN #MAUStay maustay 
+ON maustay.prvsp_refno = ipdc.prvsp_refno
+WHERE patcl = 1---inpatients
+AND [provider] = 'rk900' ----UHP activity
+AND last_episode_in_spell = '1' ----final episode of stay
+AND fce_end_ward NOT IN ('rk950amw','rk950mau') ---not discharged from MAU
+GROUP BY local_spec_desc"""
+
 mau_df = pd.read_sql(mau_query, SDMart_engine).rename(columns={'prvsp_refno':'AdmitPrvspRefno'})
 ed_df = pd.read_sql(ed_query, cl3_engine)
+dis_df = pd.read_sql(discharge_query, SDMart_engine).sort_values(by='count', ascending=False)
+dis_df.to_csv('C:/Users/obriene/Projects/MAU model/discharge specialties.csv', index=False)
 
 #Close the connection
 SDMart_engine.dispose()

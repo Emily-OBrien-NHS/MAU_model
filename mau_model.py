@@ -42,6 +42,10 @@ class params():
     ed_disc_prob = 0.64
     dta_admit_elsewhere_prob = 0.67
     mau_disc_prob = 0.2
+    #Get discharge specialty distributions
+    dis_spec_prob = pd.read_csv('C:/Users/obriene/Projects/MAU model/discharge specialties.csv')
+    dis_spec = dis_spec_prob['local_spec_desc'].tolist()
+    dis_prob = dis_spec_prob['count'].tolist()
     #empty list for results
     patient_results = []
     mau_occupancy_results = []
@@ -70,6 +74,7 @@ class spawn_patient:
         self.leave_mau_queue = np.nan
         self.leave_mau = np.nan
         self.bed_downtime = np.nan
+        self.discharge_specialty = np.nan
         self.note = ''
 
         self.mau_occ_when_queue_joined = np.nan
@@ -215,6 +220,7 @@ class mau_model:
                     patient.note = 'Discharged from MAU'
                 else:
                     patient.note = 'Admitted to Specialty Ward'
+                    patient.discharge_specialty = random.choices(params.dis_spec, params.dis_prob)[0]
 
         self.store_patient_results(patient)
 
@@ -238,10 +244,9 @@ class mau_model:
         #Where does patient go on to from the MAU
         if patient.mau_disc:
             patient.note = 'Discharged from MAU'
-            patient.split3 = 'Discharged'
         else:
             patient.note = 'Admitted to Specialty Ward'
-            patient.split3 = 'Specialty Ward'
+            patient.discharge_specialty = random.choices(params.dis_spec, params.dis_prob)[0]
 
         self.store_patient_results(patient)
     
@@ -249,7 +254,8 @@ class mau_model:
     def store_patient_results(self, patient):
         params.patient_results.append([self.run_number, patient.id, patient.arrival, patient.ed_arrival_time,
                                patient.ed_leave_time, patient.enter_mau_queue, patient.leave_mau_queue,
-                               patient.leave_mau, patient.bed_downtime, patient.note, patient.mau_occ_when_queue_joined])
+                               patient.leave_mau, patient.bed_downtime, patient.note, patient.mau_occ_when_queue_joined,
+                               patient.discharge_specialty])
         
     def store_occupancy(self):
         while True:
@@ -280,18 +286,21 @@ class run_the_model:
     patient_df = (pd.DataFrame(params.patient_results,
                               columns= ['run', 'patient ID', 'ED arrival type', 'ED arrival time',
                                         'ED leave time', 'enter MAU queue', 'leave MAU queue',
-                                        'leave MAU', 'MAU bed downtime', 'note', 'MAU occ when queue joined'])
+                                        'leave MAU', 'MAU bed downtime', 'note', 'MAU occ when queue joined',
+                                        'discharge specialty'])
                                         .sort_values(by=['run', 'patient ID']))
     patient_df['simulation arrival time'] = patient_df['ED arrival time'].fillna(patient_df['enter MAU queue'])
     patient_df['simulation arrival day'] = pd.cut(patient_df['simulation arrival time'],
                                   bins=365, labels=np.linspace(1,365,365))
+    patient_df['simulation arrival hour'] = (patient_df['simulation arrival time'] % (60*24) / 60).astype(int)
     patient_df['time in ED'] = patient_df['ED leave time'] - patient_df['ED arrival time']
     patient_df['time in MAU queue'] = patient_df['leave MAU queue'] - patient_df['enter MAU queue']
     patient_df['time in MAU'] = patient_df['leave MAU'] - patient_df['leave MAU queue']
 
-    patient_df = patient_df[['run', 'patient ID', 'simulation arrival time', 'simulation arrival day', 'ED arrival type',
-             'ED arrival time', 'ED leave time', 'time in ED', 'enter MAU queue', 'leave MAU queue',
-             'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU', 'MAU bed downtime', 'note']].copy()
+    patient_df = patient_df[['run', 'patient ID', 'simulation arrival time', 'simulation arrival day', 'simulation arrival hour',
+                             'ED arrival type', 'ED arrival time', 'ED leave time', 'time in ED', 'enter MAU queue',
+                             'leave MAU queue', 'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU',
+                             'MAU bed downtime', 'note', 'discharge specialty']].copy()
     #patient_df.to_csv(params.scenario_name + ' mau patients.csv', index=False)
     
     occ_df = pd.DataFrame(params.mau_occupancy_results,
@@ -304,4 +313,5 @@ class run_the_model:
 
 #walkin = patient_df.loc[patient_df['ED arrival type'] == 'Ambulance'].copy()
 #walkin['TimeBetweenArrivals'] = walkin['simulation arrival time'].shift(-1) - walkin['simulation arrival time']
-#print(walkin['TimeBetweenArrivals'].mean())
+#walkin.groupby('simulation arrival hour')['TimeBetweenArrivals'].mean()
+#patient_df['simulation arrival hour']
