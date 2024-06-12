@@ -80,16 +80,24 @@ cl3_engine.dispose()
 #ambulance
 amb_df = ed_df.loc[ed_df['ArrivalModeDescription'].str.contains('ambulance'),
                    ['ArrivalDateTime', 'ArrivalModeDescription']].sort_values(by='ArrivalDateTime')
+amb_df['ArrivalHour'] = amb_df['ArrivalDateTime'].dt.hour
 amb_df['DateShifted'] = amb_df['ArrivalDateTime'].shift(-1)
-amb_df['TimeBetweenArrivals'] = (amb_df['DateShifted'] - amb_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
-print(f'Average time between ambulance arrivals is {amb_df['TimeBetweenArrivals'].mean():.0f} minutes')
+amb_df['AmbTimeBetweenArrivals'] = (amb_df['DateShifted'] - amb_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
+print(f'Average time between ambulance arrivals is {amb_df['AmbTimeBetweenArrivals'].mean():.0f} minutes')
+amb_dis = amb_df.groupby('ArrivalHour', as_index=False)['AmbTimeBetweenArrivals'].mean()
 
 #walk in
 wlkin_df = ed_df.loc[~ed_df['ArrivalModeDescription'].str.contains('ambulance'),
                    ['ArrivalDateTime', 'ArrivalModeDescription']].sort_values(by='ArrivalDateTime')
+wlkin_df['ArrivalHour'] = wlkin_df['ArrivalDateTime'].dt.hour
 wlkin_df['DateShifted'] = wlkin_df['ArrivalDateTime'].shift(-1)
-wlkin_df['TimeBetweenArrivals'] = (wlkin_df['DateShifted'] - wlkin_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
-print(f'Average time between walk in arrivals is {wlkin_df['TimeBetweenArrivals'].mean():.0f} minutes')
+wlkin_df['WlkinTimeBetweenArrivals'] = (wlkin_df['DateShifted'] - wlkin_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
+print(f'Average time between walk in arrivals is {wlkin_df['WlkinTimeBetweenArrivals'].mean():.0f} minutes')
+wlkin_dis = wlkin_df.groupby('ArrivalHour', as_index=False)['WlkinTimeBetweenArrivals'].mean()
+
+#Arrivals based on hour of the day
+arrival_dis = wlkin_dis.merge(amb_dis, on='ArrivalHour')
+arrival_dis.to_csv('C:/Users/obriene/Projects/MAU model/arrival distributions.csv', index=False)
 
 #Non-ed MAU admissions
 merged = ed_df.loc[~ed_df['AdmitPrvspRefno'].isna()].merge(mau_df, on='AdmitPrvspRefno', how='outer')

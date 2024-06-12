@@ -1,4 +1,5 @@
 import os
+import math
 import simpy
 import random
 import pandas as pd
@@ -20,8 +21,9 @@ class params():
     scenario_name = 'Baseline'
     #run times and iterations
     run_time = 525600
-    iterations = 10
+    iterations = 1
     #times of processes
+    mean_arr = pd.read_csv('C:/Users/obriene/Projects/MAU model/arrival distributions.csv')
     mean_amb_arr = 18
     mean_walk_arr = 7
     mean_other_mau_arr = 751
@@ -126,10 +128,14 @@ class mau_model:
         patient.note = 'MAU filler patient'
         self.store_patient_results(patient)
 
-    ##########ARRIVALS##########
+    ########################ARRIVALS################################
     def generate_walkin_ed_arrivals(self):
         yield self.env.timeout(1)
-        while True:
+        while True > 0:
+            #Find out what the average walkin arrival time is for that time of day
+            time_of_day = math.floor(self.env.now % (60*24) / 60)
+            mean_walk_arr = (params.mean_arr['WlkinTimeBetweenArrivals'].to_numpy()
+                            [params.mean_arr['ArrivalHour'] == time_of_day].item())
             #up patient counter and spawn a new patient
             self.patient_counter += 1
             p = spawn_patient(self.patient_counter, params.ed_disc_prob,
@@ -138,12 +144,16 @@ class mau_model:
             #begin patient ed process
             self.env.process(self.ed_to_mau_journey(p))
             #randomly sample the time until the next patient arrival
-            sampled_interarrival = random.expovariate(1.0 / params.mean_walk_arr)
+            sampled_interarrival = random.expovariate(1.0 / mean_walk_arr)
             yield self.env.timeout(sampled_interarrival)
     
     def generate_ambulance_ed_arrivals(self):
         yield self.env.timeout(1)
         while True > 0:
+            #Find out what the average ambulance arrival time is for that time of day
+            time_of_day = math.floor(self.env.now % (60*24) / 60)
+            mean_amb_arr = (params.mean_arr['AmbTimeBetweenArrivals'].to_numpy()
+                            [params.mean_arr['ArrivalHour'] == time_of_day].item())
             #up patient counter and spawn a new patient
             self.patient_counter += 1
             p = spawn_patient(self.patient_counter, params.ed_disc_prob,
@@ -152,7 +162,7 @@ class mau_model:
             #begin patient ed process
             self.env.process(self.ed_to_mau_journey(p))
             #randomly sample the time until the next patient arrival
-            sampled_interarrival = random.expovariate(1.0 / params.mean_amb_arr)
+            sampled_interarrival = random.expovariate(1.0 / mean_amb_arr)
             yield self.env.timeout(sampled_interarrival)
 
     def generate_non_ed_mau_arrivals(self):
@@ -168,32 +178,6 @@ class mau_model:
                 #randomly sample the time until the next patient arrival
                 sampled_interarrival = random.expovariate(1.0 / params.mean_other_mau_arr)
                 yield self.env.timeout(sampled_interarrival)
-
-    #####################MAU PROCESS#######################################
-    def mau(self, patient):
-        #Patient begins wait for mau bed
-        patient.enter_mau_queue = self.env.now
-        patient.mau_occ_when_queue_joined = self.mau_bed.count
-
-        with self.mau_bed.request(priority=0) as req:
-            yield req
-            #record how long the patient was in the MAU queue
-            patient.leave_mau_queue = self.env.now
-            #randomly sample the time spent in an MAU bed
-            sampled_mau_duration = random.lognormvariate(params.mu_mau, params.sigma_mau)
-            #sampled_mau_duration = random.expovariate(1.0 / params.mean_mau)
-            yield self.env.timeout(sampled_mau_duration)
-        patient.leave_mau = self.env.now
-
-        #Where does patient go on to from the MAU
-        if patient.mau_disc:
-            patient.note = 'Discharged from MAU'
-            patient.split3 = 'Discharged'
-        else:
-            patient.note = 'Admitted to Specialty Ward'
-            patient.split3 = 'Specialty Ward'
-
-        self.store_patient_results(patient)
 
     ##################ED TO MAU PROCESS #########################
     def ed_to_mau_journey(self, patient):
@@ -238,6 +222,32 @@ class mau_model:
                 else:
                     patient.note = 'Admitted to Specialty Ward'
                     patient.split3 = 'Specialty Ward'
+
+        self.store_patient_results(patient)
+
+    #####################DIRECT TO MAU PROCESS#############################
+    def mau(self, patient):
+        #Patient begins wait for mau bed
+        patient.enter_mau_queue = self.env.now
+        patient.mau_occ_when_queue_joined = self.mau_bed.count
+
+        with self.mau_bed.request(priority=0) as req:
+            yield req
+            #record how long the patient was in the MAU queue
+            patient.leave_mau_queue = self.env.now
+            #randomly sample the time spent in an MAU bed
+            sampled_mau_duration = random.lognormvariate(params.mu_mau, params.sigma_mau)
+            #sampled_mau_duration = random.expovariate(1.0 / params.mean_mau)
+            yield self.env.timeout(sampled_mau_duration)
+        patient.leave_mau = self.env.now
+
+        #Where does patient go on to from the MAU
+        if patient.mau_disc:
+            patient.note = 'Discharged from MAU'
+            patient.split3 = 'Discharged'
+        else:
+            patient.note = 'Admitted to Specialty Ward'
+            patient.split3 = 'Specialty Ward'
 
         self.store_patient_results(patient)
     
@@ -290,12 +300,12 @@ class run_the_model:
              'ED arrival time', 'ED leave time', 'time in ED', 'enter MAU queue', 'leave MAU queue',
              'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU', 'note',
              'split1', 'split2', 'split3']].copy()
-    patient_df.to_csv(params.scenario_name + ' mau patients.csv', index=False)
+    #patient_df.to_csv(params.scenario_name + ' mau patients.csv', index=False)
     
     occ_df = pd.DataFrame(params.mau_occupancy_results,
                               columns=['run', 'time', 'MAU beds occupied', 'MAU queue length',
                                        'ED Occupancy'])
     occ_df['day'] = pd.cut(occ_df['time'], bins=365, labels=np.linspace(1,365,365))
-    occ_df.to_csv(params.scenario_name + ' mau occupancy.csv', index=False)
+   # occ_df.to_csv(params.scenario_name + ' mau occupancy.csv', index=False)
 
     x=5
