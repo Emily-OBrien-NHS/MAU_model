@@ -4,12 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 os.chdir('C:/Users/obriene/Projects/MAU model/outputs')
-
+run_date = '2024-06-12'
 scenario_name = 'Baseline'
-patient_df = pd.read_csv(scenario_name + ' mau patients.csv')
-occ_df = pd.read_csv(scenario_name + ' mau occupancy.csv')
 
-plot_folder = scenario_name + ' plots'
+patient_df = pd.read_csv(f'{run_date}/{scenario_name}/mau patients.csv')
+occ_df = pd.read_csv(f'{run_date}/{scenario_name}/mau occupancy.csv')
+
+plot_folder = f'{run_date}/{scenario_name}/plots'
 if not os.path.exists(plot_folder):
    os.makedirs(plot_folder)
 os.chdir(f'C:/Users/obriene/Projects/MAU model/outputs/{plot_folder}')

@@ -5,6 +5,7 @@ import random
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 os.chdir('C:/Users/obriene/Projects/MAU model/outputs')
 
@@ -21,7 +22,7 @@ class params():
     scenario_name = 'Baseline'
     #run times and iterations
     run_time = 525600
-    iterations = 1
+    iterations = 10
     #times of processes
     mean_arr = pd.read_csv('C:/Users/obriene/Projects/MAU model/arrival distributions.csv')
     #mean_amb_arr = 18
@@ -282,6 +283,18 @@ class run_the_model:
         model = mau_model(run)
         model.run()
 
+    #Create folder for today's runs
+    date_folder = f'C:/Users/obriene/Projects/MAU model/outputs/{datetime.today().strftime('%Y-%m-%d')}'
+    if not os.path.exists(date_folder):
+        os.makedirs(date_folder)
+    os.chdir(date_folder)
+    
+    #Create output folder (if doesn't exist) and navigate to it
+    scenario_folder = params.scenario_name
+    if not os.path.exists(scenario_folder):
+        os.makedirs(scenario_folder)
+    os.chdir(scenario_folder)
+
     #put full results into a dataframe and export to csv
     patient_df = (pd.DataFrame(params.patient_results,
                               columns= ['run', 'patient ID', 'ED arrival type', 'ED arrival time',
@@ -301,13 +314,13 @@ class run_the_model:
                              'ED arrival type', 'ED arrival time', 'ED leave time', 'time in ED', 'enter MAU queue',
                              'leave MAU queue', 'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU',
                              'MAU bed downtime', 'note', 'discharge specialty']].copy()
-    #patient_df.to_csv(params.scenario_name + ' mau patients.csv', index=False)
+    patient_df.to_csv('mau patients.csv', index=False)
     
     occ_df = pd.DataFrame(params.mau_occupancy_results,
                               columns=['run', 'time', 'MAU beds occupied', 'MAU queue length',
                                        'ED Occupancy'])
     occ_df['day'] = pd.cut(occ_df['time'], bins=365, labels=np.linspace(1,365,365))
-   # occ_df.to_csv(params.scenario_name + ' mau occupancy.csv', index=False)
+    occ_df.to_csv('mau occupancy.csv', index=False)
 
     x=5
 
