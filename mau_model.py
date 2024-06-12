@@ -24,9 +24,10 @@ class params():
     iterations = 1
     #times of processes
     mean_arr = pd.read_csv('C:/Users/obriene/Projects/MAU model/arrival distributions.csv')
-    mean_amb_arr = 18
-    mean_walk_arr = 7
+    #mean_amb_arr = 18
+    #mean_walk_arr = 7
     mean_other_mau_arr = 751
+    mau_bed_downtime = 59
     mean_ed = 283
     std_ed = 246
     mu_ed, sigma_ed = log_normal_transform(mean_ed, std_ed)
@@ -68,14 +69,10 @@ class spawn_patient:
         self.enter_mau_queue = np.nan
         self.leave_mau_queue = np.nan
         self.leave_mau = np.nan
+        self.bed_downtime = np.nan
         self.note = ''
 
         self.mau_occ_when_queue_joined = np.nan
-
-        self.split1 = np.nan
-        self.split2 = np.nan
-        self.split3 = np.nan
-
 
 class mau_model:
     def __init__(self, run_number):
@@ -193,15 +190,11 @@ class mau_model:
         #Decide if patient is discharged from ED, or admitted
         if patient.ed_disc:
             patient.note = 'Discharged from ED'
-            patient.split1 = 'Discharged'
         else:
-            patient.split1 = 'Admitted'
             #If patient is admitted, are they admited to MAU or elsewhere
             if patient.dta_admit_elsewhere:
                 patient.note = 'Admitted elsewhere'
-                patient.split2 = 'Elsewhere'
             else:
-                patient.split2 = 'MAU'
                 #Patient begins wait for mau bed
                 patient.enter_mau_queue = self.env.now
                 patient.mau_occ_when_queue_joined = self.mau_bed.count
@@ -210,18 +203,18 @@ class mau_model:
                     yield req
                     #record how long the patient was in the MAU queue
                     patient.leave_mau_queue = self.env.now
-                    #randomly sample the time spent in an MAU bed
+                    #randomly sample the time spent in an MAU bed and the downtime
                     sampled_mau_duration = random.lognormvariate(params.mu_mau, params.sigma_mau)
-                    yield self.env.timeout(sampled_mau_duration)
-                
-                patient.leave_mau = self.env.now
+                    sampled_bed_downtime = max(random.expovariate(1.0 / params.mau_bed_downtime), 30)
+                    yield self.env.timeout(sampled_mau_duration +  sampled_bed_downtime)
+                patient.bed_downtime = sampled_bed_downtime
+                patient.leave_mau = self.env.now - sampled_bed_downtime
+
                 #Record where the patient goes after MAU
                 if patient.mau_disc:
                     patient.note = 'Discharged from MAU'
-                    patient.split3 = 'Discharged'
                 else:
                     patient.note = 'Admitted to Specialty Ward'
-                    patient.split3 = 'Specialty Ward'
 
         self.store_patient_results(patient)
 
@@ -236,10 +229,11 @@ class mau_model:
             #record how long the patient was in the MAU queue
             patient.leave_mau_queue = self.env.now
             #randomly sample the time spent in an MAU bed
-            sampled_mau_duration = random.lognormvariate(params.mu_mau, params.sigma_mau)
+            sampled_mau_duration = (random.lognormvariate(params.mu_mau, params.sigma_mau)
+                                    + params.mau_bed_downtime)
             #sampled_mau_duration = random.expovariate(1.0 / params.mean_mau)
             yield self.env.timeout(sampled_mau_duration)
-        patient.leave_mau = self.env.now
+        patient.leave_mau = self.env.now - params.mau_bed_downtime
 
         #Where does patient go on to from the MAU
         if patient.mau_disc:
@@ -255,8 +249,7 @@ class mau_model:
     def store_patient_results(self, patient):
         params.patient_results.append([self.run_number, patient.id, patient.arrival, patient.ed_arrival_time,
                                patient.ed_leave_time, patient.enter_mau_queue, patient.leave_mau_queue,
-                               patient.leave_mau, patient.note, patient.mau_occ_when_queue_joined,
-                               patient.split1, patient.split2, patient.split3])
+                               patient.leave_mau, patient.bed_downtime, patient.note, patient.mau_occ_when_queue_joined])
         
     def store_occupancy(self):
         while True:
@@ -284,11 +277,11 @@ class run_the_model:
         model.run()
 
     #put full results into a dataframe and export to csv
-    patient_df = pd.DataFrame(params.patient_results,
-                      columns= ['run', 'patient ID', 'ED arrival type', 'ED arrival time',
-                                'ED leave time', 'enter MAU queue', 'leave MAU queue',
-                                'leave MAU', 'note', 'MAU occ when queue joined',
-                                'split1', 'split2', 'split3']).sort_values(by=['run', 'patient ID'])
+    patient_df = (pd.DataFrame(params.patient_results,
+                              columns= ['run', 'patient ID', 'ED arrival type', 'ED arrival time',
+                                        'ED leave time', 'enter MAU queue', 'leave MAU queue',
+                                        'leave MAU', 'MAU bed downtime', 'note', 'MAU occ when queue joined'])
+                                        .sort_values(by=['run', 'patient ID']))
     patient_df['simulation arrival time'] = patient_df['ED arrival time'].fillna(patient_df['enter MAU queue'])
     patient_df['simulation arrival day'] = pd.cut(patient_df['simulation arrival time'],
                                   bins=365, labels=np.linspace(1,365,365))
@@ -298,8 +291,7 @@ class run_the_model:
 
     patient_df = patient_df[['run', 'patient ID', 'simulation arrival time', 'simulation arrival day', 'ED arrival type',
              'ED arrival time', 'ED leave time', 'time in ED', 'enter MAU queue', 'leave MAU queue',
-             'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU', 'note',
-             'split1', 'split2', 'split3']].copy()
+             'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU', 'MAU bed downtime', 'note']].copy()
     #patient_df.to_csv(params.scenario_name + ' mau patients.csv', index=False)
     
     occ_df = pd.DataFrame(params.mau_occupancy_results,
@@ -309,3 +301,7 @@ class run_the_model:
    # occ_df.to_csv(params.scenario_name + ' mau occupancy.csv', index=False)
 
     x=5
+
+#walkin = patient_df.loc[patient_df['ED arrival type'] == 'Ambulance'].copy()
+#walkin['TimeBetweenArrivals'] = walkin['simulation arrival time'].shift(-1) - walkin['simulation arrival time']
+#print(walkin['TimeBetweenArrivals'].mean())
