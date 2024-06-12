@@ -10,6 +10,35 @@ scenario_name = 'Baseline'
 patient_df = pd.read_csv(f'{run_date}/{scenario_name}/mau patients.csv')
 occ_df = pd.read_csv(f'{run_date}/{scenario_name}/mau occupancy.csv')
 
+
+#Calculate averages
+patient_averages = (patient_df.mean(numeric_only=True).rename('average')
+                    [['time in ED', 'time in MAU queue', 'MAU occ when queue joined', 'time in MAU']])
+occ_averages = (occ_df.mean(numeric_only=True).rename('average')
+                [['MAU beds occupied', 'MAU queue length', 'ED Occupancy']])
+averages = pd.DataFrame(patient_averages._append(occ_averages)).transpose()
+averages.insert(0, 'scenario', scenario_name)
+#create or update averages table
+average_file = f'{run_date}/averages.xlsx'
+if not os.path.exists(average_file):
+   averages.to_excel(average_file, index=False)
+else:
+   pd.read_excel(average_file)._append(averages).to_excel(average_file, index=False)
+
+#Calculate the numbers of discharge specialties (divided by the number of runs)
+no_runs = patient_df['run'].max() + 1
+disc_spec = (((patient_df.groupby('discharge specialty')['patient ID'].count()
+              .sort_values(ascending=False)) / no_runs).round().replace(0, np.nan)
+              .astype(int).reset_index().rename(columns={'patient ID':scenario_name}))
+#Create or update discharge specialties table
+disc_spec_file = f'{run_date}/discharge specialties.xlsx'
+if not os.path.exists(disc_spec_file):
+   disc_spec.to_excel(disc_spec_file, index=False)
+else:
+   new_df = pd.read_excel(disc_spec_file).merge(disc_spec, on='discharge specialty', how='outer')
+   new_df.sort_values(by=new_df.columns[1], ascending=False).to_excel(average_file, index=False)
+
+#Create plot folder and navigate to it to save plots
 plot_folder = f'{run_date}/{scenario_name}/plots'
 if not os.path.exists(plot_folder):
    os.makedirs(plot_folder)
