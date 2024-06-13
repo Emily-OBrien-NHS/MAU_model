@@ -24,6 +24,7 @@ class params():
     occ_sample_time = 60
     #run times and iterations
     run_time = 525600
+    run_days = int(run_time/(60*24))
     iterations = 10
     #times of processes
     mean_arr = pd.read_csv('C:/Users/obriene/Projects/MAU model/arrival distributions.csv')
@@ -276,10 +277,11 @@ class mau_model:
         self.env.process(self.store_occupancy())
         self.env.run(until=(params.run_time))
 
-class run_the_model:
+def run_the_model(input_params):
     #run the model for the number of iterations specified
-    for run in range(params.iterations):
-        print(f"Run {run+1} of {params.iterations}")
+    for run in range(input_params.iterations):
+        print(f"Run {run+1} of {input_params.iterations}")
+        print(f"mau beds used is {input_params.no_mau_beds}")
         model = mau_model(run)
         model.run()
 
@@ -290,13 +292,13 @@ class run_the_model:
     os.chdir(date_folder)
     
     #Create output folder (if doesn't exist) and navigate to it
-    scenario_folder = params.scenario_name
+    scenario_folder = input_params.scenario_name
     if not os.path.exists(scenario_folder):
         os.makedirs(scenario_folder)
     os.chdir(scenario_folder)
 
     #put full results into a dataframe and export to csv
-    patient_df = (pd.DataFrame(params.patient_results,
+    patient_df = (pd.DataFrame(input_params.patient_results,
                               columns= ['run', 'patient ID', 'ED arrival type', 'ED arrival time',
                                         'ED leave time', 'enter MAU queue', 'leave MAU queue',
                                         'leave MAU', 'MAU bed downtime', 'note', 'MAU occ when queue joined',
@@ -304,7 +306,7 @@ class run_the_model:
                                         .sort_values(by=['run', 'patient ID']))
     patient_df['simulation arrival time'] = patient_df['ED arrival time'].fillna(patient_df['enter MAU queue'])
     patient_df['simulation arrival day'] = pd.cut(patient_df['simulation arrival time'],
-                                  bins=365, labels=np.linspace(1,365,365))
+                                  bins=params.run_days, labels=np.linspace(1,params.run_days,params.run_days))
     patient_df['simulation arrival hour'] = (patient_df['simulation arrival time'] % (60*24) / 60).astype(int)
     patient_df['time in ED'] = patient_df['ED leave time'] - patient_df['ED arrival time']
     patient_df['time in MAU queue'] = patient_df['leave MAU queue'] - patient_df['enter MAU queue']
@@ -314,16 +316,19 @@ class run_the_model:
                              'ED arrival type', 'ED arrival time', 'ED leave time', 'time in ED', 'enter MAU queue',
                              'leave MAU queue', 'time in MAU queue', 'MAU occ when queue joined', 'leave MAU', 'time in MAU',
                              'MAU bed downtime', 'note', 'discharge specialty']].copy()
-    patient_df.to_csv('mau patients.csv', index=False)
+    #patient_df.to_csv('mau patients.csv', index=False)
     
-    occ_df = pd.DataFrame(params.mau_occupancy_results,
+    occ_df = pd.DataFrame(input_params.mau_occupancy_results,
                               columns=['run', 'time', 'MAU beds occupied', 'MAU queue length',
                                        'ED Occupancy'])
-    occ_df['day'] = pd.cut(occ_df['time'], bins=365, labels=np.linspace(1,365,365))
-    occ_df.to_csv('mau occupancy.csv', index=False)
+    occ_df['day'] = pd.cut(occ_df['time'], bins=params.run_days, labels=np.linspace(1,params.run_days,params.run_days))
+    #occ_df.to_csv('mau occupancy.csv', index=False)
 
-    x=5
+    return patient_df, occ_df
 
+    #x=5
+
+#run_the_model(default_params)
 #walkin = patient_df.loc[patient_df['ED arrival type'] == 'Ambulance'].copy()
 #walkin['TimeBetweenArrivals'] = walkin['simulation arrival time'].shift(-1) - walkin['simulation arrival time']
 #walkin.groupby('simulation arrival hour')['TimeBetweenArrivals'].mean()
