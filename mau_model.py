@@ -19,16 +19,14 @@ class params():
         input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
         return input_mu, input_sigma
 
-    scenario_name = '4 Hour ED'
+    scenario_name = 'Baseline'
     #Time between ococupancy samples
-    occ_sample_time = 1#60
+    occ_sample_time = 60
     #run times and iterations
     run_time = 525600
     iterations = 10
     #times of processes
     mean_arr = pd.read_csv('C:/Users/obriene/Projects/MAU model/arrival distributions.csv')
-    #mean_amb_arr = 18
-    #mean_walk_arr = 7
     mean_other_mau_arr = 751
     mau_bed_downtime = 59
     mean_ed = 283

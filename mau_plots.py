@@ -4,12 +4,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 os.chdir('C:/Users/obriene/Projects/MAU model/outputs')
-run_date = '2024-06-12'
+run_date = '2024-06-13'
 scenario_name = 'Baseline'
 
 patient_df = pd.read_csv(f'{run_date}/{scenario_name}/mau patients.csv')
 occ_df = pd.read_csv(f'{run_date}/{scenario_name}/mau occupancy.csv')
 
+#remove filler patients
+patient_df = patient_df.loc[patient_df['patient ID'] > 0].copy()
 
 #Calculate averages
 patient_averages = (patient_df.mean(numeric_only=True).rename('average')
@@ -28,15 +30,16 @@ else:
 #Calculate the numbers of discharge specialties (divided by the number of runs)
 no_runs = patient_df['run'].max() + 1
 disc_spec = (((patient_df.groupby('discharge specialty')['patient ID'].count()
-              .sort_values(ascending=False)) / no_runs).round().replace(0, np.nan)
-              .astype(int).reset_index().rename(columns={'patient ID':scenario_name}))
+               .sort_values(ascending=False)) / no_runs).round().astype(int)
+               .replace(0, np.nan).reset_index()
+               .rename(columns={'patient ID':scenario_name}))
 #Create or update discharge specialties table
 disc_spec_file = f'{run_date}/discharge specialties.xlsx'
 if not os.path.exists(disc_spec_file):
    disc_spec.to_excel(disc_spec_file, index=False)
 else:
    new_df = pd.read_excel(disc_spec_file).merge(disc_spec, on='discharge specialty', how='outer')
-   new_df.sort_values(by=new_df.columns[1], ascending=False).to_excel(average_file, index=False)
+   new_df.sort_values(by=new_df.columns[1], ascending=False).to_excel(disc_spec_file, index=False)
 
 #Create plot folder and navigate to it to save plots
 plot_folder = f'{run_date}/{scenario_name}/plots'
@@ -164,15 +167,50 @@ fig16 = ax16.get_figure()
 ax16.set_title('Distribution of time spent in MAU queue')
 ax16.set_xlabel('Time in MAU queue')
 fig16.savefig('Distribution of MAU wait times.png')
+plt.close(fig16)
+
+#Average patients by hour of the day
+av_arr = (patient_df.groupby(['run', 'simulation arrival day', 'simulation arrival hour'], as_index=False)['patient ID'].count()
+          .groupby('simulation arrival hour')['patient ID'].mean()).round()
+#Plot arrival count by hour of the day
+ax17 = av_arr.plot()
+fig17 = ax17.get_figure()
+ax17.set_title('ED Arrivals by Time of Day')
+ax17.set_ylabel('Number of Patients')
+fig17.savefig('Average ED Arrivals by time of day.png')
+plt.close(fig17)
+
+#Averages by hour of the day
+hour_av = (patient_df.groupby('simulation arrival hour')
+           .agg({'time in MAU queue':'mean',
+                 'MAU occ when queue joined':'mean'}))
+
+#plot time in mau queue by hour of the day
+ax18 = hour_av['time in MAU queue'].plot()
+fig18 = ax18.get_figure()
+ax18.set_title('Average time in MAU queue by time of day')
+ax18.set_ylabel('Wait time (minutes)')
+fig18.savefig('Average time in MAU queue by time of day.png')
+plt.close(fig18)
+
+#plot mau occupancy by hour of the day
+ax19 = hour_av['MAU occ when queue joined'].plot()
+fig19 = ax19.get_figure()
+ax19.set_title('Average MAU occupancy by time of day')
+ax19.set_ylabel('Wait time (minutes)')
+fig19.savefig('Average MAU occupancy by time of day.png')
+plt.close(fig19)
+
+print('complete')
 
 #Calculate averages and save as csv
-patient_averages = (patient_df.groupby('run').mean(numeric_only=True)
-                    ._append(patient_df.mean(numeric_only=True).rename('average'))
-                    [['time in ED', 'time in MAU queue', 'MAU occ when queue joined', 'time in MAU']])
-occ_averages = (occ_df.groupby('run').mean(numeric_only=True)
-                ._append(occ_df.mean(numeric_only=True).rename('average'))
-                [['MAU beds occupied', 'MAU queue length', 'ED Occupancy']])
-patient_averages.join(occ_averages).to_csv('Averages.csv')
+#patient_averages = (patient_df.groupby('run').mean(numeric_only=True)
+ #                   ._append(patient_df.mean(numeric_only=True).rename('average'))
+  #                  [['time in ED', 'time in MAU queue', 'MAU occ when queue joined', 'time in MAU']])
+#occ_averages = (occ_df.groupby('run').mean(numeric_only=True)
+ #               ._append(occ_df.mean(numeric_only=True).rename('average'))
+  #              [['MAU beds occupied', 'MAU queue length', 'ED Occupancy']])
+#patient_averages.join(occ_averages).to_csv('Averages.csv')
 
 
 #plots for actual vs simulated time distributions.  Need to read in the data
