@@ -19,7 +19,9 @@ class params():
         input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
         return input_mu, input_sigma
 
-    scenario_name = 'Baseline'
+    scenario_name = '4 Hour ED'
+    #Time between ococupancy samples
+    occ_sample_time = 1#60
     #run times and iterations
     run_time = 525600
     iterations = 10
@@ -204,7 +206,7 @@ class mau_model:
                 #Patient begins wait for mau bed
                 patient.enter_mau_queue = self.env.now
                 patient.mau_occ_when_queue_joined = self.mau_bed.count
-
+                
                 with self.mau_bed.request(priority=0) as req:
                     yield req
                     #record how long the patient was in the MAU queue
@@ -263,7 +265,7 @@ class mau_model:
             params.mau_occupancy_results.append([self.run_number, self.mau_bed._env.now,
                                                  self.mau_bed.count, len(self.mau_bed.queue),
                                                  self.ed.count])
-            yield self.env.timeout(60)
+            yield self.env.timeout(params.occ_sample_time)
 
     ########################RUN#######################
     def run(self):
