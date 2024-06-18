@@ -61,6 +61,7 @@ SELECT [ArrivalDateTime]
       ,[ArrivalModeDescription]
 	  ,[DecidedToAdmitDateTime]
 	  ,[BedRequestedDateTime]
+      ,[BedReadyDateTime]
       ,[DischargeDateTime]
       ,[DischargeDestinationGroup]
       ,[ActualDischargeDestinationDescription]
@@ -142,6 +143,21 @@ print(f'Average time between non-ED MAU arrivals is {merged['TimeBetweenArrivals
 ed_df['TimeToDTA'] = (ed_df['DecidedToAdmitDateTime'] - ed_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
 print(f'Average time in ED until DTA is {ed_df['TimeToDTA'].mean():.0f} minutes')
 print(f'Standard Deviation time in ED until DTA is {ed_df['TimeToDTA'].std():.0f} minutes')
+
+#Average time it takes a patient to move fro ED to MAU Bed
+#merge on MAU table to get only MAU patients
+#Filter data to betwen 5% and 95% quantiles (to remove negatives and multiple
+#day transfertimes)
+merged = ed_df.loc[~ed_df['AdmitPrvspRefno'].isna()].merge(mau_df, on='AdmitPrvspRefno', how='inner')
+merged['patient move time'] = (merged['DischargeDateTime']
+                              - merged['BedReadyDateTime']) / pd.Timedelta(minutes=1)
+lower = merged['patient move time'].quantile(0.05)
+upper = merged['patient move time'].quantile(0.95)
+filtered = merged.loc[(merged['patient move time'] > lower)
+                     & (merged['patient move time'] < upper),
+                     'patient move time'].copy()
+print(f'Average time to move a patient to an MAU bed is {filtered.mean()}')
+print(f'Standard Deviation time to move a patient to an MAU bed is {filtered.std()}')
 
 #average time spent in MAU
 mau_df['MAU Time'] = (mau_df['MAUEnd'] - mau_df['MAUStart']) / pd.Timedelta(minutes=1)

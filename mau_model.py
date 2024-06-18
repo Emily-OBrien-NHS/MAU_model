@@ -23,14 +23,18 @@ class default_params():
     run_time = 525600
     run_days = int(run_time/(60*24))
     iterations = 10
-    #times of processes
+    #inter arrival times
     mean_arr = pd.read_csv('C:/Users/obriene/Projects/MAU model'
                            '/arrival distributions.csv')
     mean_other_mau_arr = 751
+    #times of processes
     mau_bed_downtime = 59
     mean_ed = 283
     std_ed = 246
     mu_ed, sigma_ed = log_normal_transform(mean_ed, std_ed)
+    mean_move = 23
+    std_move = 12
+    mu_move, sigma_move = log_normal_transform(mean_move, std_move)
     mean_mau = 1784
     std_mau = 2224
     mu_mau, sigma_mau = log_normal_transform(mean_mau, std_mau)
@@ -76,6 +80,7 @@ class spawn_patient:
         self.ed_arrival_time = np.nan
         self.ed_leave_time = np.nan
         self.enter_mau_queue = np.nan
+        self.move_time = np.nan
         self.leave_mau_queue = np.nan
         self.leave_mau = np.nan
         self.bed_downtime = np.nan
@@ -233,16 +238,26 @@ class mau_model:
                     yield req
                     #record how long the patient was in the MAU queue
                     patient.leave_mau_queue = self.env.now
-                    #randomly sample the time spent in an MAU bed and downtime
+                    #randomly sample the time to move to MAU
+                    #the time spent in an MAU bed and the downtime
+                    sampled_pat_move_duration = random.lognormvariate(
+                                                self.input_params.mu_move,
+                                                self.input_params.sigma_move)
                     sampled_mau_duration = random.lognormvariate(
-                        self.input_params.mu_mau, self.input_params.sigma_mau)
+                                           self.input_params.mu_mau,
+                                           self.input_params.sigma_mau)
                     sampled_bed_downtime = max(random.expovariate(1.0
                                         / self.input_params.mau_bed_downtime),
                                         30)
-                    yield self.env.timeout(sampled_mau_duration
+                    yield self.env.timeout(sampled_pat_move_duration
+                                           + sampled_mau_duration
                                            +  sampled_bed_downtime)
+                #Record patient MAU stay data
+                patient.move_time = sampled_pat_move_duration
                 patient.bed_downtime = sampled_bed_downtime
-                patient.leave_mau = self.env.now - sampled_bed_downtime
+                patient.leave_mau = (self.env.now
+                                     - sampled_bed_downtime
+                                     - sampled_pat_move_duration)
 
                 #Record where the patient goes after MAU
                 if patient.mau_disc:
@@ -265,13 +280,25 @@ class mau_model:
             yield req
             #record how long the patient was in the MAU queue
             patient.leave_mau_queue = self.env.now
-            #randomly sample the time spent in an MAU bed
-            sampled_mau_duration = (random.lognormvariate(
-                                        self.input_params.mu_mau,
-                                        self.input_params.sigma_mau)
-                                    + self.input_params.mau_bed_downtime)
-            yield self.env.timeout(sampled_mau_duration)
-        patient.leave_mau = self.env.now - self.input_params.mau_bed_downtime
+            #randomly sample the time to move to MAU
+            #the time spent in an MAU bed and the downtime
+            sampled_pat_move_duration = random.lognormvariate(
+                                        self.input_params.mu_move,
+                                        self.input_params.sigma_move)
+            sampled_mau_duration = random.lognormvariate(
+                                    self.input_params.mu_mau,
+                                    self.input_params.sigma_mau)
+            sampled_bed_downtime = max(random.expovariate(1.0
+                                    / self.input_params.mau_bed_downtime), 30)
+            yield self.env.timeout(sampled_pat_move_duration
+                                    + sampled_mau_duration
+                                    +  sampled_bed_downtime)
+            #Record patient MAU stay data
+            patient.move_time = sampled_pat_move_duration
+            patient.bed_downtime = sampled_bed_downtime
+            patient.leave_mau = (self.env.now
+                                - sampled_bed_downtime
+                                - sampled_pat_move_duration)
 
         #Where does patient go on to from the MAU
         if patient.mau_disc:
@@ -289,9 +316,9 @@ class mau_model:
         self.input_params.patient_results.append([self.run_number, patient.id,
                             patient.arrival, patient.ed_arrival_time,
                             patient.ed_leave_time, patient.enter_mau_queue,
-                            patient.leave_mau_queue, patient.leave_mau,
-                            patient.bed_downtime, patient.note,
-                            patient.mau_occ_when_queue_joined,
+                             patient.leave_mau_queue, patient.move_time,
+                            patient.leave_mau, patient.bed_downtime,
+                            patient.note, patient.mau_occ_when_queue_joined,
                             patient.discharge_specialty])
         
     def store_occupancy(self):
@@ -339,7 +366,8 @@ def run_the_model(input_params):
                               columns=['run', 'patient ID', 'ED arrival type',
                                        'ED arrival time', 'ED leave time',
                                        'enter MAU queue', 'leave MAU queue',
-                                       'leave MAU', 'MAU bed downtime', 'note',
+                                       'ED to MAU move time', 'leave MAU',
+                                       'MAU bed downtime', 'note',
                                        'MAU occ when queue joined',
                                        'discharge specialty'])
                                        .sort_values(by=['run', 'patient ID']))
@@ -370,6 +398,9 @@ def run_the_model(input_params):
                              'time in MAU', 'MAU bed downtime', 'note',
                              'discharge specialty']].copy()
     patient_df.to_csv('mau patients.csv', index=False)
+    print(f'average time in MAU queue {patient_df['time in MAU queue'].mean()}')
+    print(f'max time in MAU queue {patient_df['time in MAU queue'].max()}')
+
     
     #Put occupaion output data into dataframe and save to csv
     occ_df = pd.DataFrame(input_params.mau_occupancy_results,
@@ -379,9 +410,10 @@ def run_the_model(input_params):
                            labels=np.linspace(1,input_params.run_days,
                                               input_params.run_days))
     occ_df.to_csv('mau occupancy.csv', index=False)
-
+    print(f'average length of MAU queue {occ_df['MAU queue length'].mean()}')
+    print(f'max length of MAU queue {occ_df['MAU queue length'].max()}')
     return patient_df, occ_df
 
-
-#patient_df, occ_df = run_the_model(default_params)
+x=5
+#pat, occ = run_the_model(default_params)
 

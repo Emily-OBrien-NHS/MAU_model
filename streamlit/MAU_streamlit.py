@@ -9,8 +9,18 @@ from mau_model import run_the_model
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+import numpy as np
 
 #import time
+def log_normal_transform(mu, sigma):
+    #function to take the mean and standard deviation of a series
+    #and convert then into the mu and sigma inputes required
+    #to use a log normal distribution for randomly generating
+    #patient times.
+    input_mu = np.log((mu**2) / ((mu**2 + sigma**2)**0.5))
+    input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
+    return input_mu, input_sigma
+
 
 st.set_page_config(
      #page_title="Ex-stream-ly Cool App",
@@ -67,7 +77,9 @@ args = default_params()
 #update defaults to selections
 args.mean_other_mau_arr = mean_other_mau_arr
 args.mean_ed = mean_ed
+args.mu_ed, args.sigma_ed = log_normal_transform(mean_ed, args.std_ed)
 args.mean_mau = mean_mau
+args.mu_mau, args.sigma_mau = log_normal_transform(mean_mau, args.std_mau)
 args.mau_bed_downtime = mau_bed_downtime
 args.no_mau_beds = no_mau_beds
 args.ed_disc_prob = ed_disc_prob
@@ -106,23 +118,30 @@ if st.button('Run simulation'):
                                                 'time in MAU queue']].astype(int)
     st.dataframe(averages)
 
-    mau_pat = pat.dropna(subset='enter MAU queue').copy()
-    st.subheader('Time spent in MAU queue')
+    #Group up data for plots
+    mau_pat = (pat.dropna(subset='enter MAU queue')
+               .groupby('simulation arrival day', as_index=False)
+               ['time in MAU queue'].mean())
+    av_occ = (occ.groupby('day', as_index=False)
+              [['MAU queue length', 'MAU beds occupied']].mean())
+
+    #Time in MAU queue plot
+    st.subheader('Average time spent in MAU queue by day')
     st.line_chart(data=mau_pat, x='simulation arrival day',
                   y=['time in MAU queue'])
-
+    #Length of MAU queue plot
     st.subheader('Length of MAU queue')
-    st.line_chart(data=occ, x='day', y=['MAU queue length'])
-
+    st.line_chart(data=av_occ, x='day', y=['MAU queue length'])
+    #MAU beds occupancy plot
+    st.subheader('MAU beds occupancy')
+    st.line_chart(data=av_occ, x='day', y=['MAU beds occupied'])
+    #MAU wait times distribution plot
     st.subheader('Distribution of MAU wait times')
     fig, ax = plt.subplots()
-    ax.hist(mau_pat['time in MAU queue'], bins=25)
+    ax.hist(pat['time in MAU queue'], bins=25)
     ax.set_xlabel('Time in MAU queue')
     ax.set_ylabel('Frequency')
     st.pyplot(fig)
-
-    st.subheader('MAU beds occupancy')
-    st.line_chart(data=occ, x='day', y=['MAU beds occupied'])
 
 
     #Print a table of the input parameters
