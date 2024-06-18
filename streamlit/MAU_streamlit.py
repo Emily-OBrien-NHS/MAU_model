@@ -4,7 +4,7 @@ import stqdm
 #from modelReplicator import Replicator
 import os
 os.chdir('C:/Users/obriene/Projects/MAU model')
-from mau_model import params
+from mau_model import default_params
 from mau_model import run_the_model
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -30,36 +30,36 @@ st.title('MAU Model')
 with st.sidebar:
     st.markdown('# Input Parameters')
     run_time = mean_other_mau_arr = st.slider('Simulation run time (days)', 7, 730,
-                                        value=int(params.run_time // (60*24)))
+                                        value=int(default_params.run_time // (60*24)))
     iterations = mean_other_mau_arr = st.slider('Simulation iterations', 1, 10,
-                                        value=params.iterations)
+                                        value=default_params.iterations)
     st.divider()
     st.markdown('#Arrivals')
     mean_other_mau_arr = st.slider('Average time between non ED MAU arrivals', 0, 1000,
-                                        value=params.mean_other_mau_arr)
+                                        value=default_params.mean_other_mau_arr)
     st.divider()
     st.markdown('#Average stay')
     mean_ed = st.slider('Average time in ED until DTA',0, 500,
-                                value = params.mean_ed)
+                                value = default_params.mean_ed)
     mean_mau = st.slider('Average time in MAU', 0, 3000,
-                                value = params.mean_mau)
+                                value = default_params.mean_mau)
     mau_bed_downtime = st.slider('Average MAU bed downtime', 30, 180,
-                                value = params.mau_bed_downtime)
+                                value = default_params.mau_bed_downtime)
     st.divider()
     st.markdown('#MAU beds')
     no_mau_beds = st.slider('Number of MAU beds', 25, 100,
-                                value = params.no_mau_beds)
+                                value = default_params.no_mau_beds)
     st.divider()
     st.markdown('#Split probabilities')
     ed_disc_prob = st.slider('Proportion discharged from ED', 0.0, 1.0,
-                                value = params.ed_disc_prob)
-    dta_admit_elsewhere_prob = st.slider('Proportion admitted elsewhere than MAU', 0.0, 0.1,
-                                value = params.dta_admit_elsewhere_prob)
+                                value = default_params.ed_disc_prob)
+    dta_admit_elsewhere_prob = st.slider('Proportion admitted elsewhere than MAU', 0.0, 1.0,
+                                value = default_params.dta_admit_elsewhere_prob)
     mau_disc_prob = st.slider('Proportion discharged from MAU', 0.0, 1.0,
-                                value = params.mau_disc_prob)
+                                value = default_params.mau_disc_prob)
 
 #Get the parameters in a usable format
-args = params()
+args = default_params()
 #update defaults to selections
 args.mean_other_mau_arr = mean_other_mau_arr
 args.mean_ed = mean_ed

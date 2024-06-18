@@ -13,7 +13,8 @@ cl3_engine = create_engine('mssql+pyodbc://@cl3-data/DataWarehouse?'\
 
 #sql query
 mau_query = """SET NOCOUNT ON
-select prvsp_refno, MAUStart = min(sstay_start_dttm), MAUEnd = max(sstay_end_dttm)
+select prvsp_refno, MAUStart = min(sstay_start_dttm),
+MAUEnd = max(sstay_end_dttm)
   into #MAUStay
   from [PiMSMarts].[dbo].[ip_movements]
   where move_reason_sp = 's'
@@ -22,7 +23,9 @@ select prvsp_refno, MAUStart = min(sstay_start_dttm), MAUEnd = max(sstay_end_dtt
   group by prvsp_refno
 
   select mstay.*, post_mau.sstay_ward_code, post_mau.sstay_start_dttm,
-  case when (post_mau.sstay_ward_code is NULL or post_mau.sstay_ward_code = 'RK950101' or post_mau.sstay_ward_code = 'RK950113') then 'MAU Discharge' --If they go to DL
+  case when (post_mau.sstay_ward_code is NULL
+  or post_mau.sstay_ward_code = 'RK950101'
+  or post_mau.sstay_ward_code = 'RK950113') then 'MAU Discharge' --If they go to DL
 		when post_mau.sstay_ward_code like 'RK950%' then 'Transfer to Acute Ward'
 		when (post_mau.sstay_ward_code like 'RK901%' or
 			post_mau.sstay_ward_code like 'RK906%' or
@@ -105,8 +108,9 @@ cl3_engine.dispose()
 #####################################################################################
 #interarrival times for ambulance and walkin
 #ambulance
-amb_df = ed_df.loc[ed_df['ArrivalModeDescription'].str.contains('ambulance'),
-                   ['ArrivalDateTime', 'ArrivalModeDescription']].sort_values(by='ArrivalDateTime')
+amb_df = (ed_df.loc[ed_df['ArrivalModeDescription'].str.contains('ambulance'),
+                   ['ArrivalDateTime', 'ArrivalModeDescription']]
+                   .sort_values(by='ArrivalDateTime'))
 amb_df['ArrivalHour'] = amb_df['ArrivalDateTime'].dt.hour
 amb_df['DateShifted'] = amb_df['ArrivalDateTime'].shift(-1)
 amb_df['AmbTimeBetweenArrivals'] = (amb_df['DateShifted'] - amb_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
