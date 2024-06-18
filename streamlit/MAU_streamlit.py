@@ -29,16 +29,19 @@ st.title('MAU Model')
 #Put input parameters in a sidebar
 with st.sidebar:
     st.markdown('# Input Parameters')
-    run_time = mean_other_mau_arr = st.slider('Simulation run time (days)', 7, 730,
-                                        value=int(default_params.run_time // (60*24)))
+    run_time = mean_other_mau_arr = st.slider('Simulation run time (days)', 7,
+                                              730,
+                                        value=int(default_params.run_time
+                                                  // (60*24)))
     iterations = mean_other_mau_arr = st.slider('Simulation iterations', 1, 10,
                                         value=default_params.iterations)
     st.divider()
-    st.markdown('#Arrivals')
-    mean_other_mau_arr = st.slider('Average time between non ED MAU arrivals', 0, 1000,
-                                        value=default_params.mean_other_mau_arr)
+    st.markdown('# Arrivals')
+    mean_other_mau_arr = st.slider('Average time between non ED MAU arrivals',
+                                   0, 1000,
+                                   value=default_params.mean_other_mau_arr)
     st.divider()
-    st.markdown('#Average stay')
+    st.markdown('# Average stay')
     mean_ed = st.slider('Average time in ED until DTA',0, 500,
                                 value = default_params.mean_ed)
     mean_mau = st.slider('Average time in MAU', 0, 3000,
@@ -46,15 +49,16 @@ with st.sidebar:
     mau_bed_downtime = st.slider('Average MAU bed downtime', 30, 180,
                                 value = default_params.mau_bed_downtime)
     st.divider()
-    st.markdown('#MAU beds')
+    st.markdown('# MAU beds')
     no_mau_beds = st.slider('Number of MAU beds', 25, 100,
                                 value = default_params.no_mau_beds)
     st.divider()
-    st.markdown('#Split probabilities')
+    st.markdown('# Split probabilities')
     ed_disc_prob = st.slider('Proportion discharged from ED', 0.0, 1.0,
-                                value = default_params.ed_disc_prob)
-    dta_admit_elsewhere_prob = st.slider('Proportion admitted elsewhere than MAU', 0.0, 1.0,
-                                value = default_params.dta_admit_elsewhere_prob)
+                                value=default_params.ed_disc_prob)
+    dta_admit_elsewhere_prob = st.slider('Proportion admitted elsewhere than MAU', 
+                                         0.0, 1.0,
+                                         value=default_params.dta_admit_elsewhere_prob)
     mau_disc_prob = st.slider('Proportion discharged from MAU', 0.0, 1.0,
                                 value = default_params.mau_disc_prob)
 
@@ -87,16 +91,39 @@ if st.button('Run simulation'):
         #	results, ed_res = replications.run_scenarios()
     st.success('Done!')
 
-    patient_averages = (pat.mean(numeric_only=True).rename('average')
-                    [['time in ED', 'time in MAU queue', 'MAU occ when queue joined', 'time in MAU']])
-    occ_averages = (occ.mean(numeric_only=True).rename('average')
-                [['MAU beds occupied', 'MAU queue length', 'ED Occupancy']])
+    #Add table of averages from simulation run
+    st.subheader('Averages of the model run (time in minutes)')
+    patient_averages = pat.mean(numeric_only=True).rename('average')
+    occ_averages = occ.mean(numeric_only=True).rename('average')
     averages = pd.DataFrame(patient_averages._append(occ_averages)).transpose()
-        
-    st.markdown(averages.to_markdown())
+    averages = averages[['time in ED', 'ED Occupancy', 'time in MAU queue',
+                         'MAU queue length', 'time in MAU',
+                         'MAU beds occupied']].copy()
+    averages[['time in ED',
+              'time in MAU',
+              'time in MAU queue']] = averages[['time in ED',
+                                                'time in MAU',
+                                                'time in MAU queue']].astype(int)
+    st.dataframe(averages)
 
+    mau_pat = pat.dropna(subset='enter MAU queue').copy()
+    st.subheader('Time spent in MAU queue')
+    st.line_chart(data=mau_pat, x='simulation arrival day',
+                  y=['time in MAU queue'])
+
+    st.subheader('Length of MAU queue')
+    st.line_chart(data=occ, x='day', y=['MAU queue length'])
+
+    st.subheader('Distribution of MAU wait times')
+    fig, ax = plt.subplots()
+    ax.hist(mau_pat['time in MAU queue'], bins=25)
+    ax.set_xlabel('Time in MAU queue')
+    ax.set_ylabel('Frequency')
+    st.pyplot(fig)
+
+    st.subheader('MAU beds occupancy')
     st.line_chart(data=occ, x='day', y=['MAU beds occupied'])
-    st.subheader('MAU Occupancy')
+
 
     #Print a table of the input parameters
     param_table = f'''

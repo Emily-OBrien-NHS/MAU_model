@@ -318,7 +318,6 @@ def run_the_model(input_params):
     #run the model for the number of iterations specified
     for run in range(input_params.iterations):
         print(f"Run {run+1} of {input_params.iterations}")
-        print(f"mau beds used is {input_params.no_mau_beds}")
         model = mau_model(run, input_params)
         model.run()
 
