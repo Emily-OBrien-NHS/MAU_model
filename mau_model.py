@@ -240,9 +240,10 @@ class mau_model:
                     patient.leave_mau_queue = self.env.now
                     #randomly sample the time to move to MAU
                     #the time spent in an MAU bed and the downtime
-                    sampled_pat_move_duration = random.lognormvariate(
+                    sampled_pat_move_duration = max(random.lognormvariate(
                                                 self.input_params.mu_move,
-                                                self.input_params.sigma_move)
+                                                self.input_params.sigma_move),
+                                                5)
                     sampled_mau_duration = random.lognormvariate(
                                            self.input_params.mu_mau,
                                            self.input_params.sigma_mau)
@@ -328,6 +329,9 @@ class mau_model:
                                                         self.mau_bed.count,
                                                         len(self.mau_bed.queue),
                                                     self.ed.count])
+            print(f"Beds used is {self.input_params.no_mau_beds}")
+            print(f"time:{self.mau_bed._env.now}, beds:{self.mau_bed.count},"
+                  + f" queue:{len(self.mau_bed.queue)}")
             yield self.env.timeout(self.input_params.occ_sample_time)
 
     ########################RUN#######################
@@ -345,6 +349,7 @@ def run_the_model(input_params):
     #run the model for the number of iterations specified
     for run in range(input_params.iterations):
         print(f"Run {run+1} of {input_params.iterations}")
+        print(f"Beds used is {input_params.no_mau_beds}")
         model = mau_model(run, input_params)
         model.run()
 

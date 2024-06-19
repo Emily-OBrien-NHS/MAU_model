@@ -56,6 +56,10 @@ with st.sidebar:
                                 value = default_params.mean_ed)
     mean_mau = st.slider('Average time in MAU', 0, 3000,
                                 value = default_params.mean_mau)
+    st.divider()
+    st.markdown('# patient move and bed downitme')
+    mean_move = st.slider('Average time to move patient into MAU bed',
+                          10, 60, value = default_params.mean_move)
     mau_bed_downtime = st.slider('Average MAU bed downtime', 30, 180,
                                 value = default_params.mau_bed_downtime)
     st.divider()
@@ -75,9 +79,12 @@ with st.sidebar:
 #Get the parameters in a usable format
 args = default_params()
 #update defaults to selections
+args.scenario_name = 'streamlit'
 args.mean_other_mau_arr = mean_other_mau_arr
 args.mean_ed = mean_ed
 args.mu_ed, args.sigma_ed = log_normal_transform(mean_ed, args.std_ed)
+args.mean_move = mean_move
+args.mu_move, args.sigma_move = log_normal_transform(mean_move, args.std_move)
 args.mean_mau = mean_mau
 args.mu_mau, args.sigma_mau = log_normal_transform(mean_mau, args.std_mau)
 args.mau_bed_downtime = mau_bed_downtime
@@ -86,14 +93,21 @@ args.ed_disc_prob = ed_disc_prob
 args.dta_admit_elsewhere_prob = dta_admit_elsewhere_prob
 args.mau_disc_prob = mau_disc_prob
 args.run_time = run_time*(60*24)#go back to minutes
+args.run_days = int(args.run_time/(60*24))
 args.iterations = iterations
+args.patient_results = []
+args.mau_occupancy_results = []
 
 	
 #Button to run simulation
 if st.button('Run simulation'):
     #First delete the previous results
-    #if pat:
-     #   del pat, occ
+    #try:
+     #  if pat:
+      #     del pat, occ
+    #except:
+     #   pass
+
     # Run sim
     with st.empty():
         #progress_bar = stqdm(iterations, desc = 'Simulation progress...')
@@ -120,9 +134,9 @@ if st.button('Run simulation'):
 
     #Group up data for plots
     mau_pat = (pat.dropna(subset='enter MAU queue')
-               .groupby('simulation arrival day', as_index=False)
-               ['time in MAU queue'].mean())
-    av_occ = (occ.groupby('day', as_index=False)
+               .groupby('simulation arrival day', as_index=False,
+                        observed=True)['time in MAU queue'].mean())
+    av_occ = (occ.groupby('day', as_index=False, observed=True)
               [['MAU queue length', 'MAU beds occupied']].mean())
 
     #Time in MAU queue plot
