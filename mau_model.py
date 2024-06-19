@@ -16,7 +16,7 @@ class default_params():
         input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
         return input_mu, input_sigma
 
-    scenario_name = 'Baseline'
+    scenario_name = 'TEST'#'Baseline'
     #Time between ococupancy samples
     occ_sample_time = 60
     #run times and iterations
@@ -329,9 +329,6 @@ class mau_model:
                                                         self.mau_bed.count,
                                                         len(self.mau_bed.queue),
                                                     self.ed.count])
-            print(f"Beds used is {self.input_params.no_mau_beds}")
-            print(f"time:{self.mau_bed._env.now}, beds:{self.mau_bed.count},"
-                  + f" queue:{len(self.mau_bed.queue)}")
             yield self.env.timeout(self.input_params.occ_sample_time)
 
     ########################RUN#######################
@@ -345,14 +342,8 @@ class mau_model:
         self.env.process(self.store_occupancy())
         self.env.run(until=(self.input_params.run_time))
 
-def run_the_model(input_params):
-    #run the model for the number of iterations specified
-    for run in range(input_params.iterations):
-        print(f"Run {run+1} of {input_params.iterations}")
-        print(f"Beds used is {input_params.no_mau_beds}")
-        model = mau_model(run, input_params)
-        model.run()
-
+def export_results(scenario, run_days, pat_res, occ_res):
+    #Create folders for outputs, do data processing and write to csv
     #Create folder for today's runs
     date_folder = (f'C:/Users/obriene/Projects/MAU model/outputs'
                    f'/{datetime.today().strftime('%Y-%m-%d')}')
@@ -361,13 +352,13 @@ def run_the_model(input_params):
     os.chdir(date_folder)
     
     #Create output folder (if doesn't exist) and navigate to it
-    scenario_folder = input_params.scenario_name
+    scenario_folder = scenario
     if not os.path.exists(scenario_folder):
         os.makedirs(scenario_folder)
     os.chdir(scenario_folder)
 
     #put full patient results into a dataframe and export to csv
-    patient_df = (pd.DataFrame(input_params.patient_results,
+    patient_df = (pd.DataFrame(pat_res,
                               columns=['run', 'patient ID', 'ED arrival type',
                                        'ED arrival time', 'ED leave time',
                                        'enter MAU queue', 'leave MAU queue',
@@ -380,10 +371,10 @@ def run_the_model(input_params):
                                         .fillna(patient_df['enter MAU queue']))
     patient_df['simulation arrival day'] = pd.cut(
                                           patient_df['simulation arrival time'],
-                                          bins=input_params.run_days,
+                                          bins=run_days,
                                           labels=np.linspace(1,
-                                                 input_params.run_days,
-                                                 input_params.run_days))
+                                                 run_days,
+                                                 run_days))
     patient_df['simulation arrival hour'] = (
                                         patient_df['simulation arrival time']
                                         % (60*24) / 60).astype(int)
@@ -403,22 +394,30 @@ def run_the_model(input_params):
                              'time in MAU', 'MAU bed downtime', 'note',
                              'discharge specialty']].copy()
     patient_df.to_csv('mau patients.csv', index=False)
-    print(f'average time in MAU queue {patient_df['time in MAU queue'].mean()}')
-    print(f'max time in MAU queue {patient_df['time in MAU queue'].max()}')
 
-    
     #Put occupaion output data into dataframe and save to csv
-    occ_df = pd.DataFrame(input_params.mau_occupancy_results,
+    occ_df = pd.DataFrame(occ_res,
                               columns=['run', 'time', 'MAU beds occupied',
                                        'MAU queue length', 'ED Occupancy'])
-    occ_df['day'] = pd.cut(occ_df['time'], bins=input_params.run_days,
-                           labels=np.linspace(1,input_params.run_days,
-                                              input_params.run_days))
+    occ_df['day'] = pd.cut(occ_df['time'], bins=run_days,
+                           labels=np.linspace(1,run_days,
+                                              run_days))
     occ_df.to_csv('mau occupancy.csv', index=False)
-    print(f'average length of MAU queue {occ_df['MAU queue length'].mean()}')
-    print(f'max length of MAU queue {occ_df['MAU queue length'].max()}')
     return patient_df, occ_df
 
-x=5
-#pat, occ = run_the_model(default_params)
+
+def run_the_model(input_params):
+    #run the model for the number of iterations specified
+    for run in range(input_params.iterations):
+        print(f"Run {run+1} of {input_params.iterations}")
+        model = mau_model(run, input_params)
+        model.run()
+
+    patient_df, occ_df = export_results(input_params.scenario_name,
+                                        input_params.run_days,
+                                        input_params.patient_results,
+                                        input_params.mau_occupancy_results)
+    return patient_df, occ_df
+
+pat, occ = run_the_model(default_params)
 

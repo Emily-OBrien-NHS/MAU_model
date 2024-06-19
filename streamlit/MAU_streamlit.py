@@ -1,11 +1,11 @@
 import streamlit as st
-#import AcutePlusEDModel_streamlit as md
 import stqdm
-#from modelReplicator import Replicator
 import os
 os.chdir('C:/Users/obriene/Projects/MAU model')
 from mau_model import default_params
 from mau_model import run_the_model
+os.chdir('C:/Users/obriene/Projects/MAU model/streamlit')
+from mau_replicator import Replicator
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -98,7 +98,7 @@ args.iterations = iterations
 args.patient_results = []
 args.mau_occupancy_results = []
 
-	
+    
 #Button to run simulation
 if st.button('Run simulation'):
     #First delete the previous results
@@ -112,9 +112,10 @@ if st.button('Run simulation'):
     with st.empty():
         #progress_bar = stqdm(iterations, desc = 'Simulation progress...')
         pat, occ = run_the_model(args)
+
         #with st.spinner('Simulating patient arrivals and discharges...'):
-        #	replications = Replicator(args,replications = args.number_of_runs)
-        #	results, ed_res = replications.run_scenarios()
+         #   replications = Replicator(args, replications=args.iterations)
+          #  pat, occ = replications.run_scenarios()
     st.success('Done!')
 
     #Add table of averages from simulation run
