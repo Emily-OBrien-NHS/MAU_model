@@ -16,7 +16,7 @@ class default_params():
         input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
         return input_mu, input_sigma
 
-    scenario_name = 'TEST'#'Baseline'
+    scenario_name = '4 Hour ED + MAU Queue'
     #Time between ococupancy samples
     occ_sample_time = 60
     #run times and iterations

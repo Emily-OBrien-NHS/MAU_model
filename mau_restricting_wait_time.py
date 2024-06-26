@@ -8,7 +8,7 @@ os.chdir('C:/Users/obriene/Projects/MAU model/outputs')
 run_date = '2024-06-13'
 scenario_name = '4 Hour ED'
 
-#If MAU_only then run capping only the MAU queue, if False
+#If MAU_only is True then run capping only the MAU queue, if False
 #caps the wait time for ED+MAU queue.
 MAU_only = False
 total_wait = 240
@@ -58,7 +58,8 @@ occ_df = (occ_df.merge(act_MAU_adm_time, on=['run', 'time'], how='left')
           .merge(act_MAU_leave_time, on=['run', 'time'], how='left')
           .merge(new_MAU_leave_time, on=['run', 'time'], how='left'))
 
-#Work out what the MAU occupancy would be if everyone waits a maximum of an hour
+#Work out what the MAU occupancy would be if everyone waits a maximum of
+#inputted wait time
 occ_df['change in MAU occ'] = ((-occ_df['act MAU adm'] + occ_df['new MAU adm'])
                                -(-occ_df['act MAU leave'] + occ_df['new MAU leave'])).fillna(0)
 occ_df['MAU beds occupied'] = occ_df['MAU beds occupied'] + occ_df['change in MAU occ']
