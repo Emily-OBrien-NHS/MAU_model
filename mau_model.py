@@ -7,11 +7,16 @@ import numpy as np
 from datetime import datetime
 
 class default_params():
-    def log_normal_transform(mu, sigma):
-        #function to take the mean and standard deviation of a series
+    def multiply_scalars(df, col_name, mean):
+        df[col_name] = df[col_name] * mean
+
+    def log_normal_transform(mean_std):
+        #function to take two columns of mean and standard deviation
         #and convert then into the mu and sigma inputes required
         #to use a log normal distribution for randomly generating
         #patient times.
+        mu = mean_std.iloc[0]
+        sigma = mean_std.iloc[1]
         input_mu = np.log((mu**2) / ((mu**2 + sigma**2)**0.5))
         input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
         return input_mu, input_sigma
@@ -24,20 +29,45 @@ class default_params():
     run_days = int(run_time/(60*24))
     iterations = 10
     #inter arrival times
-    mean_arr = pd.read_csv('C:/Users/obriene/Projects/MAU model'
-                           '/arrival distributions.csv')
+    mean_amb_arr = 18
+    mean_wlkin_arr = 7
     mean_other_mau_arr = 751
     #times of processes
     mau_bed_downtime = 59
     mean_ed = 283
     std_ed = 246
-    mu_ed, sigma_ed = log_normal_transform(mean_ed, std_ed)
     mean_move = 23
     std_move = 12
-    mu_move, sigma_move = log_normal_transform(mean_move, std_move)
     mean_mau = 1784
     std_mau = 2224
-    mu_mau, sigma_mau = log_normal_transform(mean_mau, std_mau)
+
+    #Multiply hourly scalars by averages
+    hourly_scalars = pd.read_csv('C:/Users/obriene/Projects/MAU model'
+                           '/hourly average scalars.csv')
+    pairs = [('AmbTimeBetweenArrivals', mean_amb_arr),
+             ('WlkinTimeBetweenArrivals',  mean_wlkin_arr),
+             ('Non ED MAU Admissions', mean_other_mau_arr),
+             ('mean ED LoS', mean_ed),
+             ('std ED LoS', std_ed),
+             ('mean move', mean_move),
+             ('std move', std_move),
+             ('mean MAU LoS', mean_mau),
+             ('std MAU LoS', std_mau)]
+    for col, av in pairs:
+        multiply_scalars(hourly_scalars, col, av)
+
+    #Transform log normal columns to the input mu and sigma
+    log_pairs = [('mean ED LoS', 'std ED LoS'),
+                 ('mean move', 'std move'),
+                 ('mean MAU LoS', 'std MAU LoS')]
+    for input_mean, input_std in log_pairs:
+       hourly_scalars[[input_mean,
+                       input_std]] = (hourly_scalars[[input_mean, input_std]]
+                                      .apply(log_normal_transform, axis=1,
+                                             result_type='expand'))
+    #Get the initial mau times for filling mau at time 0
+    init_mu_mau, init_sigma_mau = hourly_scalars.loc[0,
+                                    ['mean MAU LoS', 'std MAU LoS']].tolist()
     #resources
     no_mau_beds = 52
     #Initial capacities
@@ -137,7 +167,7 @@ class mau_model:
             #plus twice the ED time, to allow a queue to build up before
             #initial patients start leaving.
             sampled_mau_duration = random.lognormvariate(
-                self.input_params.mu_mau, self.input_params.sigma_mau)
+                self.input_params.init_mu_mau, self.input_params.init_sigma_mau)
             yield self.env.timeout((sampled_mau_duration
                                     + 2*self.input_params.mean_ed))
         patient.leave_mau = self.env.now
@@ -151,9 +181,9 @@ class mau_model:
             #Calculate the current time of day in the simulation, and look up
             #the average walkin arrival for that time of day
             time_of_day = math.floor(self.env.now % (60*24) / 60)
-            arr_hour_mask = (self.input_params.mean_arr['ArrivalHour']
+            arr_hour_mask = (self.input_params.hourly_scalars['ArrivalHour']
                              == time_of_day)
-            wlkin_arr = (self.input_params.mean_arr['WlkinTimeBetweenArrivals']
+            wlkin_arr = (self.input_params.hourly_scalars['WlkinTimeBetweenArrivals']
                          .to_numpy())
             mean_walk_arr = (wlkin_arr[arr_hour_mask].item())
             #up patient counter and spawn a new walk-in patient
@@ -175,9 +205,9 @@ class mau_model:
             #Calculate the current time of day in the simulation, and look up
             #the average ambulance arrival for that time of day
             time_of_day = math.floor(self.env.now % (60*24) / 60)
-            arr_hour_mask = (self.input_params.mean_arr['ArrivalHour']
+            arr_hour_mask = (self.input_params.hourly_scalars['ArrivalHour']
                              == time_of_day)
-            amb_arr = (self.input_params.mean_arr['AmbTimeBetweenArrivals']
+            amb_arr = (self.input_params.hourly_scalars['AmbTimeBetweenArrivals']
                          .to_numpy())
             mean_amb_arr = (amb_arr[arr_hour_mask].item())
             #up patient counter and spawn a new ambulance patient
@@ -196,6 +226,14 @@ class mau_model:
     def generate_non_ed_mau_arrivals(self):
             yield self.env.timeout(1)
             while True > 0:
+                #Calculate the current time of day in the simulation, and look up
+                #the average non ed arrival for that time of day
+                time_of_day = math.floor(self.env.now % (60*24) / 60)
+                arr_hour_mask = (self.input_params.hourly_scalars['ArrivalHour']
+                             == time_of_day)
+                non_ed_arr = (self.input_params.hourly_scalars['Non ED MAU Admissions']
+                         .to_numpy())
+                mean_non_ed_arr = (non_ed_arr[arr_hour_mask].item())
                 #up patient counter and spawn a new patient
                 self.patient_counter += 1
                 p = spawn_patient(self.patient_counter,
@@ -206,8 +244,7 @@ class mau_model:
                 #begin patient ed process
                 self.env.process(self.mau(p))
                 #randomly sample the time until the next patient arrival
-                sampled_interarrival = random.expovariate(1.0
-                                        / self.input_params.mean_other_mau_arr)
+                sampled_interarrival = random.expovariate(1.0 / mean_non_ed_arr)
                 yield self.env.timeout(sampled_interarrival)
 
     ##################ED TO MAU PROCESS #########################
@@ -216,9 +253,16 @@ class mau_model:
         patient.ed_arrival_time = self.env.now 
         with self.ed.request() as req:
             yield req
-            #randomly sample the time spent in ED
-            sampled_ed_time = random.lognormvariate(self.input_params.mu_ed,
-                                                    self.input_params.sigma_ed)
+            #randomly sample the time spent in ED from the average for the time
+            #of day
+            time_of_day = math.floor(self.env.now % (60*24) / 60)
+            hour_mask = (self.input_params.hourly_scalars['ArrivalHour']
+                             == time_of_day)
+            ed_time = (self.input_params.hourly_scalars[['mean ED LoS', 'std ED LoS']]
+                         .to_numpy())
+            mu_sigma_ed_time = (ed_time[hour_mask][0])
+            sampled_ed_time = random.lognormvariate(mu_sigma_ed_time[0],
+                                                    mu_sigma_ed_time[1])
             yield self.env.timeout(sampled_ed_time)
         patient.ed_leave_time = self.env.now
 
@@ -238,15 +282,22 @@ class mau_model:
                     yield req
                     #record how long the patient was in the MAU queue
                     patient.leave_mau_queue = self.env.now
-                    #randomly sample the time to move to MAU
-                    #the time spent in an MAU bed and the downtime
-                    sampled_pat_move_duration = max(random.lognormvariate(
-                                                self.input_params.mu_move,
-                                                self.input_params.sigma_move),
-                                                5)
+                    #randomly sample the time to move to MAU and the time spent
+                    #in an MAU bed from the average for the time of day
+                    time_of_day = math.floor(self.env.now % (60*24) / 60)
+                    hour_mask = (self.input_params.hourly_scalars['ArrivalHour']
+                                    == time_of_day)
+                    mau_time = (self.input_params.hourly_scalars[[
+                        'mean move', 'std move', 'mean MAU LoS', 'std MAU LoS']]
+                        .to_numpy())
+                    mu_sigma_mau_times = (mau_time[hour_mask][0])
+                    sampled_pat_move_duration = max(
+                        random.lognormvariate(mu_sigma_mau_times[0],
+                                              mu_sigma_mau_times[1]), 5)
                     sampled_mau_duration = random.lognormvariate(
-                                           self.input_params.mu_mau,
-                                           self.input_params.sigma_mau)
+                                                    mu_sigma_mau_times[2],
+                                                    mu_sigma_mau_times[3])
+                    #randomly sample bed downtime
                     sampled_bed_downtime = max(random.expovariate(1.0
                                         / self.input_params.mau_bed_downtime),
                                         30)
@@ -281,14 +332,21 @@ class mau_model:
             yield req
             #record how long the patient was in the MAU queue
             patient.leave_mau_queue = self.env.now
-            #randomly sample the time to move to MAU
-            #the time spent in an MAU bed and the downtime
-            sampled_pat_move_duration = random.lognormvariate(
-                                        self.input_params.mu_move,
-                                        self.input_params.sigma_move)
-            sampled_mau_duration = random.lognormvariate(
-                                    self.input_params.mu_mau,
-                                    self.input_params.sigma_mau)
+            #randomly sample the time to move to MAU and the time spent
+            #in an MAU bed from the average for the time of day
+            time_of_day = math.floor(self.env.now % (60*24) / 60)
+            hour_mask = (self.input_params.hourly_scalars['ArrivalHour']
+                            == time_of_day)
+            mau_time = (self.input_params.hourly_scalars[[
+                    'mean move', 'std move', 'mean MAU LoS', 'std MAU LoS']]
+                    .to_numpy())
+            mu_sigma_mau_times = (mau_time[hour_mask][0])
+            sampled_pat_move_duration = max(
+                random.lognormvariate(mu_sigma_mau_times[0],
+                                      mu_sigma_mau_times[1]), 5)
+            sampled_mau_duration = random.lognormvariate(mu_sigma_mau_times[2],
+                                                         mu_sigma_mau_times[3])
+            #randomly sample bed downtime
             sampled_bed_downtime = max(random.expovariate(1.0
                                     / self.input_params.mau_bed_downtime), 30)
             yield self.env.timeout(sampled_pat_move_duration

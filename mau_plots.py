@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 os.chdir('C:/Users/obriene/Projects/MAU model/outputs')
-run_date = '2024-06-13'
-scenario_name = 'Baseline'
+run_date = '2024-07-02'
+scenario_name = '4 Hour ED + MAU Queue'
 
 patient_df = pd.read_csv(f'{run_date}/{scenario_name}/mau patients.csv')
 occ_df = pd.read_csv(f'{run_date}/{scenario_name}/mau occupancy.csv')

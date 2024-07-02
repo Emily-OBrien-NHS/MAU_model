@@ -97,10 +97,13 @@ AND last_episode_in_spell = '1' ----final episode of stay
 AND fce_end_ward NOT IN ('rk950amw','rk950mau') ---not discharged from MAU
 GROUP BY local_spec_desc"""
 
-mau_df = pd.read_sql(mau_query, SDMart_engine).rename(columns={'prvsp_refno':'AdmitPrvspRefno'})
+mau_df = (pd.read_sql(mau_query, SDMart_engine)
+          .rename(columns={'prvsp_refno':'AdmitPrvspRefno'}))
 ed_df = pd.read_sql(ed_query, cl3_engine)
-dis_df = pd.read_sql(discharge_query, SDMart_engine).sort_values(by='count', ascending=False)
-dis_df.to_csv('C:/Users/obriene/Projects/MAU model/discharge specialties.csv', index=False)
+dis_df = pd.read_sql(discharge_query, SDMart_engine).sort_values(by='count',
+                                                                 ascending=False)
+dis_df.to_csv('C:/Users/obriene/Projects/MAU model/discharge specialties.csv',
+              index=False)
 
 #Close the connection
 SDMart_engine.dispose()
@@ -114,62 +117,123 @@ amb_df = (ed_df.loc[ed_df['ArrivalModeDescription'].str.contains('ambulance'),
                    .sort_values(by='ArrivalDateTime'))
 amb_df['ArrivalHour'] = amb_df['ArrivalDateTime'].dt.hour
 amb_df['DateShifted'] = amb_df['ArrivalDateTime'].shift(-1)
-amb_df['AmbTimeBetweenArrivals'] = (amb_df['DateShifted'] - amb_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
-print(f'Average time between ambulance arrivals is {amb_df['AmbTimeBetweenArrivals'].mean():.0f} minutes')
-amb_dis = amb_df.groupby('ArrivalHour', as_index=False)['AmbTimeBetweenArrivals'].mean()
+amb_df['AmbTimeBetweenArrivals'] = ((amb_df['DateShifted'] - amb_df['ArrivalDateTime'])
+                                    / pd.Timedelta(minutes=1))
+amb_av = amb_df['AmbTimeBetweenArrivals'].mean()
+print(f'Average time between ambulance arrivals is {amb_av:.0f} minutes')
+amb_dis = (amb_df.groupby('ArrivalHour', as_index=False)
+           ['AmbTimeBetweenArrivals'].mean())
+amb_dis['AmbTimeBetweenArrivals'] = amb_dis['AmbTimeBetweenArrivals'] / amb_av
 
 #walk in
-wlkin_df = ed_df.loc[~ed_df['ArrivalModeDescription'].str.contains('ambulance'),
-                   ['ArrivalDateTime', 'ArrivalModeDescription']].sort_values(by='ArrivalDateTime')
+wlkin_df = (ed_df.loc[~ed_df['ArrivalModeDescription'].str.contains('ambulance'),
+                   ['ArrivalDateTime', 'ArrivalModeDescription']]
+                   .sort_values(by='ArrivalDateTime'))
 wlkin_df['ArrivalHour'] = wlkin_df['ArrivalDateTime'].dt.hour
 wlkin_df['DateShifted'] = wlkin_df['ArrivalDateTime'].shift(-1)
-wlkin_df['WlkinTimeBetweenArrivals'] = (wlkin_df['DateShifted'] - wlkin_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
-print(f'Average time between walk in arrivals is {wlkin_df['WlkinTimeBetweenArrivals'].mean():.0f} minutes')
-wlkin_dis = wlkin_df.groupby('ArrivalHour', as_index=False)['WlkinTimeBetweenArrivals'].mean()
-
+wlkin_df['WlkinTimeBetweenArrivals'] = ((wlkin_df['DateShifted']
+                                         - wlkin_df['ArrivalDateTime'])
+                                         / pd.Timedelta(minutes=1))
+wlkin_av = wlkin_df['WlkinTimeBetweenArrivals'].mean()
+print(f'Average time between walk in arrivals is {wlkin_av:.0f} minutes')
+wlkin_dis = (wlkin_df.groupby('ArrivalHour', as_index=False)
+             ['WlkinTimeBetweenArrivals'].mean())
+wlkin_dis['WlkinTimeBetweenArrivals'] = (wlkin_dis['WlkinTimeBetweenArrivals']
+                                         / wlkin_av)
 #Arrivals based on hour of the day
-arrival_dis = wlkin_dis.merge(amb_dis, on='ArrivalHour')
-arrival_dis.to_csv('C:/Users/obriene/Projects/MAU model/arrival distributions.csv', index=False)
+hourly_averages = wlkin_dis.merge(amb_dis, on='ArrivalHour')
 
 #Non-ed MAU admissions
-merged = ed_df.loc[~ed_df['AdmitPrvspRefno'].isna()].merge(mau_df, on='AdmitPrvspRefno', how='outer')
+merged = ed_df.loc[~ed_df['AdmitPrvspRefno'].isna()].merge(mau_df,
+                                                           on='AdmitPrvspRefno',
+                                                           how='outer')
 merged = merged.loc[merged['ArrivalDateTime'].isnull(),
                     ['MAUStart', 'DischRoute']].sort_values(by='MAUStart')
+merged['ArrivalHour'] = merged['MAUStart'].dt.hour
 merged['DateShifted'] = merged['MAUStart'].shift(-1)
-merged['TimeBetweenArrivals'] = (merged['DateShifted'] - merged['MAUStart']) / pd.Timedelta(minutes=1)
-print(f'Average time between non-ED MAU arrivals is {merged['TimeBetweenArrivals'].mean():.0f} minutes')
+merged['TimeBetweenArrivals'] = ((merged['DateShifted'] - merged['MAUStart'])
+                                 / pd.Timedelta(minutes=1))
+non_ed_arr_av = merged['TimeBetweenArrivals'].mean()
+print(f'Average time between non-ED MAU arrivals is {non_ed_arr_av:.0f} minutes')
+non_ed_arr = (merged.groupby('ArrivalHour', as_index=False)
+              ['TimeBetweenArrivals'].mean()
+              .rename(columns={'TimeBetweenArrivals':'Non ED MAU Admissions'}))
+non_ed_arr['Non ED MAU Admissions'] = (non_ed_arr['Non ED MAU Admissions']
+                                       / non_ed_arr_av)
+hourly_averages = hourly_averages.merge(non_ed_arr, on='ArrivalHour', how='left').interpolate()
 
 #Average time in ED until DTA
-ed_df['TimeToDTA'] = (ed_df['DecidedToAdmitDateTime'] - ed_df['ArrivalDateTime']) / pd.Timedelta(minutes=1)
-print(f'Average time in ED until DTA is {ed_df['TimeToDTA'].mean():.0f} minutes')
-print(f'Standard Deviation time in ED until DTA is {ed_df['TimeToDTA'].std():.0f} minutes')
+ed_df['ArrivalHour'] = ed_df['ArrivalDateTime'].dt.hour
+ed_df['TimeToDTA'] = ((ed_df['DecidedToAdmitDateTime'] - ed_df['ArrivalDateTime'])
+                      / pd.Timedelta(minutes=1))
+mean_ed_los = ed_df['TimeToDTA'].mean()
+std_ed_los = ed_df['TimeToDTA'].std()
+print(f'Average time in ED until DTA is {mean_ed_los:.0f} minutes')
+print(f'Standard Deviation time in ED until DTA is {std_ed_los:.0f} minutes')
+ed_los = (ed_df.groupby('ArrivalHour', as_index=False)['TimeToDTA']
+          .agg(['mean', 'std']))
+ed_los['mean ED LoS'] = ed_los['mean'] / mean_ed_los
+ed_los['std ED LoS'] = ed_los['std'] / std_ed_los
+hourly_averages = hourly_averages.merge(ed_los[['ArrivalHour', 'mean ED LoS',
+                                                'std ED LoS']], on='ArrivalHour',
+                                                how='left').interpolate()
 
 #Average time it takes a patient to move fro ED to MAU Bed
 #merge on MAU table to get only MAU patients
 #Filter data to betwen 5% and 95% quantiles (to remove negatives and multiple
 #day transfertimes)
-merged = ed_df.loc[~ed_df['AdmitPrvspRefno'].isna()].merge(mau_df, on='AdmitPrvspRefno', how='inner')
-merged['patient move time'] = (merged['DischargeDateTime']
-                              - merged['BedReadyDateTime']) / pd.Timedelta(minutes=1)
+merged = ed_df.loc[~ed_df['AdmitPrvspRefno'].isna()].merge(mau_df,
+                                                           on='AdmitPrvspRefno',
+                                                           how='inner')
+merged['patient move time'] = ((merged['DischargeDateTime']
+                              - merged['BedReadyDateTime'])
+                              / pd.Timedelta(minutes=1))
 lower = merged['patient move time'].quantile(0.05)
 upper = merged['patient move time'].quantile(0.95)
+merged['ArrivalHour'] = merged['DischargeDateTime'].dt.hour
 filtered = merged.loc[(merged['patient move time'] > lower)
                      & (merged['patient move time'] < upper),
-                     'patient move time'].copy()
-print(f'Average time to move a patient to an MAU bed is {filtered.mean()}')
-print(f'Standard Deviation time to move a patient to an MAU bed is {filtered.std()}')
+                     ['patient move time', 'ArrivalHour']].copy()
+mean_move = filtered['patient move time'].mean()
+std_move = filtered['patient move time'].std()
+print(f'Average time to move a patient to an MAU bed is {mean_move}')
+print(f'Standard Deviation time to move a patient to an MAU bed is {std_move}')
+move = (filtered.groupby('ArrivalHour', as_index=False)['patient move time']
+        .agg(['mean', 'std']))
+move['mean move'] = move['mean'] / mean_move
+move['std move'] = move['std'] / std_move
+hourly_averages = hourly_averages.merge(move[['ArrivalHour',
+                                              'mean move', 'std move']],
+                                              on='ArrivalHour', how='left').interpolate()
 
 #average time spent in MAU
-mau_df['MAU Time'] = (mau_df['MAUEnd'] - mau_df['MAUStart']) / pd.Timedelta(minutes=1)
-print(f'Average time spent in MAU is {round(mau_df['MAU Time'].mean())} minutes')
-print(f'Standard Deviation time in ED until DTA is {mau_df['MAU Time'].std():.0f} minutes')
+mau_df['ArrivalHour'] = mau_df['MAUStart'].dt.hour
+mau_df['MAU Time'] = ((mau_df['MAUEnd'] - mau_df['MAUStart'])
+                      / pd.Timedelta(minutes=1))
+mean_mau_los = round(mau_df['MAU Time'].mean())
+std_mau_los = mau_df['MAU Time'].std()
+print(f'Average time spent in MAU is {mean_mau_los} minutes')
+print(f'Standard Deviation time in ED until DTA is {std_mau_los:.0f} minutes')
+mau_los = (mau_df.groupby('ArrivalHour', as_index=False)['MAU Time']
+           .agg(['mean', 'std']))
+mau_los['mean MAU LoS'] = mau_los['mean'] / mean_mau_los
+mau_los['std MAU LoS'] = mau_los['std'] / std_mau_los
+hourly_averages = hourly_averages.merge(mau_los[['ArrivalHour',
+                                                 'mean MAU LoS', 'std MAU LoS']],
+                                                 on='ArrivalHour', how='left').interpolate()
 
+#export hourly scalars to csv
+hourly_averages.to_csv('C:/Users/obriene/Projects/MAU model/hourly average scalars.csv', index=False)
+print(hourly_averages)
+
+####PROPORTIONS####
 #Proportion of ED patients who get discharged
 prop = ed_df['AdmitPrvspRefno'].notnull().value_counts(normalize=True)
 print(f'Proportion of patients being discharged from ED is {prop[False]:.2f}')
 
 #Proportion of admitted that are admitted to MAU
-merged = ed_df.loc[~ed_df['AdmitPrvspRefno'].isna()].merge(mau_df, on='AdmitPrvspRefno', how='left')
+merged = (ed_df.loc[~ed_df['AdmitPrvspRefno'].isna()]
+          .merge(mau_df, on='AdmitPrvspRefno', how='left'))
 prop = merged['sstay_start_dttm'].notnull().value_counts(normalize=True)
 print(f'Proportion of patients that are admitted to somewhere other than MAU is {prop[False]:.2f}')
 

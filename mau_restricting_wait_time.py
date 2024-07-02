@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 os.chdir('C:/Users/obriene/Projects/MAU model/outputs')
 
 #Select scario run to adjust MAU occupancy restricting wait times
-run_date = '2024-06-13'
-scenario_name = '4 Hour ED'
+run_date = '2024-07-02'
+scenario_name = '1 Hour MAU Queue'
 
 #If MAU_only is True then run capping only the MAU queue, if False
 #caps the wait time for ED+MAU queue.
