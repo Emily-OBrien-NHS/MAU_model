@@ -1,0 +1,10 @@
+numpy
+pandas
+random
+simpy
+math
+stqdm
+matplotlib
+joblib
+mau_model
+mau_replicator
