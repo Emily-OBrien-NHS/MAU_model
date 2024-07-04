@@ -4,5 +4,3 @@ simpy
 stqdm
 matplotlib
 joblib
-mau_model
-mau_replicator
