@@ -7,20 +7,6 @@ import numpy as np
 from datetime import datetime
 
 class default_params():
-    def multiply_scalars(df, col_name, mean):
-        df[col_name] = df[col_name] * mean
-
-    def log_normal_transform(mean_std):
-        #function to take two columns of mean and standard deviation
-        #and convert then into the mu and sigma inputes required
-        #to use a log normal distribution for randomly generating
-        #patient times.
-        mu = mean_std.iloc[0]
-        sigma = mean_std.iloc[1]
-        input_mu = np.log((mu**2) / ((mu**2 + sigma**2)**0.5))
-        input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
-        return input_mu, input_sigma
-
     scenario_name = 'Baseline'
     #Time between ococupancy samples
     occ_sample_time = 60
@@ -40,34 +26,8 @@ class default_params():
     std_move = 12
     mean_mau = 1784
     std_mau = 2224
-
-    #Multiply hourly scalars by averages
-    hourly_scalars = pd.read_csv('C:/Users/obriene/Projects/MAU model'
-                           '/hourly average scalars.csv')
-    pairs = [('AmbTimeBetweenArrivals', mean_amb_arr),
-             ('WlkinTimeBetweenArrivals',  mean_wlkin_arr),
-             ('Non ED MAU Admissions', mean_other_mau_arr),
-             ('mean ED LoS', mean_ed),
-             ('std ED LoS', std_ed),
-             ('mean move', mean_move),
-             ('std move', std_move),
-             ('mean MAU LoS', mean_mau),
-             ('std MAU LoS', std_mau)]
-    for col, av in pairs:
-        multiply_scalars(hourly_scalars, col, av)
-
-    #Transform log normal columns to the input mu and sigma
-    log_pairs = [('mean ED LoS', 'std ED LoS'),
-                 ('mean move', 'std move'),
-                 ('mean MAU LoS', 'std MAU LoS')]
-    for input_mean, input_std in log_pairs:
-       hourly_scalars[[input_mean,
-                       input_std]] = (hourly_scalars[[input_mean, input_std]]
-                                      .apply(log_normal_transform, axis=1,
-                                             result_type='expand'))
-    #Get the initial mau times for filling mau at time 0
-    init_mu_mau, init_sigma_mau = hourly_scalars.loc[0,
-                                    ['mean MAU LoS', 'std MAU LoS']].tolist()
+    #set the initial mau times for filling mau at time 0
+    init_mu_mau, init_sigma_mau = mean_mau, std_mau
     #resources
     no_mau_beds = 52
     #Initial capacities
@@ -81,6 +41,9 @@ class default_params():
                                 '/discharge specialties.csv')
     dis_spec = dis_spec_prob['local_spec_desc'].tolist()
     dis_prob = dis_spec_prob['count'].tolist()
+    #read in hourly scalars by averages
+    hourly_scalars = pd.read_csv('C:/Users/obriene/Projects/MAU model'
+                           '/hourly average scalars.csv')
     #empty list for results
     patient_results = []
     mau_occupancy_results = []
@@ -91,7 +54,6 @@ class spawn_patient:
         #set up patient id and arrival type
         self.id = p_id
         self.arrival = ''
-
         #work out probabilities of patient following each path
         #Does patient get discharged from ED
         self.decide_ed_disc_prob = random.uniform(0,1)
@@ -105,7 +67,6 @@ class spawn_patient:
         self.decide_mau_disc_prob = random.uniform(0,1)
         self.mau_disc = (True if self.decide_mau_disc_prob <= mau_disc_prob
                          else False)
-        
         #Establish variables to store results
         self.ed_arrival_time = np.nan
         self.ed_leave_time = np.nan
@@ -116,7 +77,6 @@ class spawn_patient:
         self.bed_downtime = np.nan
         self.discharge_specialty = np.nan
         self.note = ''
-
         self.mau_occ_when_queue_joined = np.nan
 
 class mau_model:
@@ -133,7 +93,7 @@ class mau_model:
         self.ed = simpy.Resource(self.env, capacity=np.inf) 
         self.mau_bed = simpy.PriorityResource(self.env,
                                               capacity=input_params.no_mau_beds)
-
+    
     ##################FILL ED AND MAU AT START OF RUN####################
     #ED
     def generate_initial_ed_patients(self):
@@ -292,10 +252,6 @@ class mau_model:
                     time_of_day = math.floor(self.env.now % (60*24) / 60)
                     hour_mask = (self.input_params.hourly_scalars['ArrivalHour']
                                     == time_of_day)
-                    #mau_time = (self.input_params.hourly_scalars[[
-                     #   'mean move', 'std move', 'mean MAU LoS', 'std MAU LoS']]
-                      #  .to_numpy())
-                    #mu_sigma_mau_times = (mau_time[hour_mask][0])
                     mu_mau_time = (self.input_params
                                    .hourly_scalars['mean MAU LoS'].to_numpy()
                                    [hour_mask].item())
@@ -308,12 +264,12 @@ class mau_model:
                     sigma_mau_move_time = (self.input_params
                                         .hourly_scalars['std move'].to_numpy()
                                         [hour_mask].item())
-            
+                    
+                    sampled_mau_duration = random.lognormvariate(mu_mau_time,
+                                                                 sigma_mau_time)
                     sampled_pat_move_duration = max(random.lognormvariate(
-                                                mu_mau_time, sigma_mau_time), 5)
-                    sampled_mau_duration = random.lognormvariate(
                                                     mu_mau_move_time,
-                                                    sigma_mau_move_time)
+                                                    sigma_mau_move_time), 5)
                     #randomly sample bed downtime
                     sampled_bed_downtime = max(random.expovariate(1.0
                                         / self.input_params.mau_bed_downtime),
@@ -354,10 +310,6 @@ class mau_model:
             time_of_day = math.floor(self.env.now % (60*24) / 60)
             hour_mask = (self.input_params.hourly_scalars['ArrivalHour']
                             == time_of_day)
-            #mau_time = (self.input_params.hourly_scalars[[
-             #       'mean move', 'std move', 'mean MAU LoS', 'std MAU LoS']]
-              #      .to_numpy())
-            #mu_sigma_mau_times = (mau_time[hour_mask][0])
             mu_mau_time = (self.input_params
                            .hourly_scalars['mean MAU LoS'].to_numpy()
                            [hour_mask].item())
@@ -371,12 +323,11 @@ class mau_model:
                                    .hourly_scalars['std move'].to_numpy()
                                    [hour_mask].item())
             
+            sampled_mau_duration = random.lognormvariate(mu_mau_time,
+                                                         sigma_mau_time)
             sampled_pat_move_duration = max(random.lognormvariate(
-                                                mu_mau_time, sigma_mau_time), 5)
-            sampled_mau_duration = random.lognormvariate(
-                                                    mu_mau_move_time,
-                                                    sigma_mau_move_time)
-
+                                            mu_mau_move_time,
+                                            sigma_mau_move_time), 5)
             #randomly sample bed downtime
             sampled_bed_downtime = max(random.expovariate(1.0
                                     / self.input_params.mau_bed_downtime), 30)
@@ -389,7 +340,6 @@ class mau_model:
             patient.leave_mau = (self.env.now
                                 - sampled_bed_downtime
                                 - sampled_pat_move_duration)
-
         #Where does patient go on to from the MAU
         if patient.mau_disc:
             patient.note = 'Discharged from MAU'
@@ -398,7 +348,6 @@ class mau_model:
             patient.discharge_specialty = random.choices(
                                           self.input_params.dis_spec,
                                           self.input_params.dis_prob)[0]
-
         self.store_patient_results(patient)
     
     ###################RECORD RESULTS####################
@@ -432,21 +381,7 @@ class mau_model:
         self.env.run(until=(self.input_params.run_time))
 
 def export_results(scenario, run_days, pat_res, occ_res):
-    #Create folders for outputs, do data processing and write to csv
-    #Create folder for today's runs
-    date_folder = (f'C:/Users/obriene/Projects/MAU model/outputs'
-                   f'/{datetime.today().strftime('%Y-%m-%d')}')
-    if not os.path.exists(date_folder):
-        os.makedirs(date_folder)
-    os.chdir(date_folder)
-    
-    #Create output folder (if doesn't exist) and navigate to it
-    scenario_folder = scenario
-    if not os.path.exists(scenario_folder):
-        os.makedirs(scenario_folder)
-    os.chdir(scenario_folder)
-
-    #put full patient results into a dataframe and export to csv
+    #put full patient results into a dataframe
     patient_df = (pd.DataFrame(pat_res,
                               columns=['run', 'patient ID', 'ED arrival type',
                                        'ED arrival time', 'ED leave time',
@@ -482,31 +417,67 @@ def export_results(scenario, run_days, pat_res, occ_res):
                              'MAU occ when queue joined', 'leave MAU',
                              'time in MAU', 'MAU bed downtime', 'note',
                              'discharge specialty']].copy()
-    patient_df.to_csv('mau patients.csv', index=False)
 
-    #Put occupaion output data into dataframe and save to csv
+    #Put occupaion output data into dataframe
     occ_df = pd.DataFrame(occ_res,
                               columns=['run', 'time', 'MAU beds occupied',
                                        'MAU queue length', 'ED Occupancy'])
     occ_df['day'] = pd.cut(occ_df['time'], bins=run_days,
                            labels=np.linspace(1,run_days,
                                               run_days))
-    occ_df.to_csv('mau occupancy.csv', index=False)
+
     return patient_df, occ_df
 
 
+############TRANSOFORM HOUR OF THE DAY MEANS BY INPUTS GIVEN###############
+def log_normal_transform(mean_std):
+    #function to take two columns of mean and std and convert into the mu and
+    # #sigma inputes required for a log normal distribution
+    mu = mean_std.iloc[0]
+    sigma = mean_std.iloc[1]
+    input_mu = np.log((mu**2) / ((mu**2 + sigma**2)**0.5))
+    input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
+    return input_mu, input_sigma
+
+def transform_inputs(input_params):
+    #Transform hourly averges based on the inputs provided
+    pairs = [('AmbTimeBetweenArrivals', input_params.mean_amb_arr),
+            ('WlkinTimeBetweenArrivals',  input_params.mean_wlkin_arr),
+            ('Non ED MAU Admissions', input_params.mean_other_mau_arr),
+            ('mean ED LoS', input_params.mean_ed),
+            ('std ED LoS', input_params.std_ed),
+            ('mean move', input_params.mean_move),
+            ('std move', input_params.std_move),
+            ('mean MAU LoS', input_params.mean_mau),
+            ('std MAU LoS', input_params.std_mau)]
+    for col, av in pairs:
+        input_params.hourly_scalars[col] = (input_params.hourly_scalars[col]
+                                            * av)
+    #Log transform the hourly averages and std
+    log_pairs = [('mean ED LoS', 'std ED LoS'), ('mean move', 'std move'),
+                     ('mean MAU LoS', 'std MAU LoS')]
+    for input_mean, input_std in log_pairs:
+        input_params.hourly_scalars[
+            [input_mean, input_std]] = (input_params
+                                        .hourly_scalars[[input_mean, input_std]]
+                                        .apply(log_normal_transform, axis=1,
+                                               result_type='expand'))
+    #Get the initial mau times for filling mau at time 0
+    input_params.init_mu_mau, input_params.init_sigma_mau = (
+             input_params.hourly_scalars.loc[0, ['mean MAU LoS', 'std MAU LoS']]
+             .tolist())
+
+################################RUN THE MODEL##################################
 def run_the_model(input_params):
+    #transform input parameters for hour of the day
+    transform_inputs(input_params)
     #run the model for the number of iterations specified
     for run in range(input_params.iterations):
         print(f"Run {run+1} of {input_params.iterations}")
         model = mau_model(run, input_params)
         model.run()
-
     patient_df, occ_df = export_results(input_params.scenario_name,
                                         input_params.run_days,
                                         input_params.patient_results,
                                         input_params.mau_occupancy_results)
     return patient_df, occ_df
-
-pat, occ = run_the_model(default_params)
-

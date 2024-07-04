@@ -4,7 +4,6 @@ import os
 os.chdir('C:/Users/obriene/Projects/MAU model')
 from mau_model import default_params
 from mau_model import run_the_model
-os.chdir('C:/Users/obriene/Projects/MAU model/streamlit')
 from mau_replicator import Replicator
 import matplotlib.pyplot as plt
 import seaborn as sns
