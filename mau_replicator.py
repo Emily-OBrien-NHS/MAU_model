@@ -19,7 +19,7 @@ class Replicator:
         #n_jobs = max cores to use; use -1 for all available cores.
         # Use of  `delayed` ensures different random  numbers in each run
         trial_output = Parallel(n_jobs=-1)(delayed(self.single_run)(inputs, i) 
-                for i in stqdm(range(self.replications)))
+                for i in range(self.replications))
         return trial_output
     
     def single_run(self, inputs, i=0):
