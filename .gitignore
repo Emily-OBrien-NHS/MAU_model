@@ -4,9 +4,6 @@
 # any excel files
 *.xlsx
 
-# any csv files
-*.csv
-
 #any pptx files
 *.pptx
 
@@ -15,3 +12,6 @@
 
 #any pyc
 *.pyc
+
+#outputs
+outputs/
