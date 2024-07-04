@@ -47,8 +47,8 @@ class default_params():
     input_hourly_scalars = pd.read_csv('hourly average scalars.csv')
     hourly_scalars = np.nan
     #empty list for results
-    #patient_results = []
-    #mau_occupancy_results = []
+    pat_results = []
+    occ_results = []
 
 class spawn_patient:
     def __init__(self, p_id, eu_disc_prob, dta_admit_elsewhere_prob,
@@ -385,9 +385,13 @@ class mau_model:
         self.env.process(self.generate_non_ed_mau_arrivals())
         self.env.process(self.store_occupancy())
         self.env.run(until=(self.input_params.run_time))
+        #assign these back to default params so model can be run in parallel
+        #and as is
+        default_params.pat_res += self.patient_results
+        default_params.occ_res += self.mau_occupancy_results
         return self.patient_results, self.mau_occupancy_results
 
-def export_results(scenario, run_days, pat_res, occ_res):
+def export_results(run_days, pat_res, occ_res):
     #put full patient results into a dataframe
     patient_df = (pd.DataFrame(pat_res,
                               columns=['run', 'patient ID', 'ED arrival type',
@@ -484,8 +488,7 @@ def run_the_model(input_params):
         print(f"Run {run+1} of {input_params.iterations}")
         model = mau_model(run, input_params)
         model.run()
-    patient_df, occ_df = export_results(input_params.scenario_name,
-                                        input_params.run_days,
+    patient_df, occ_df = export_results(input_params.run_days,
                                         input_params.patient_results,
                                         input_params.mau_occupancy_results)
     return patient_df, occ_df

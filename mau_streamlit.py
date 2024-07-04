@@ -101,11 +101,11 @@ if st.button('Run simulation'):
     with st.empty():
         #progress_bar = stqdm(range(iterations), desc='Simulation progress...',
          #                    mininterval=1)
-        pat, occ = run_the_model(args)
+        #pat, occ = run_the_model(args)
 
-        #with st.spinner('Simulating patient arrivals and discharges...'):
-         #   replications = Replicator(args, replications=args.iterations)
-          #  pat, occ = replications.run_scenarios()
+        with st.spinner('Simulating patient arrivals and discharges...'):
+            replications = Replicator(args, replications=args.iterations)
+            pat, occ = replications.run_scenarios()
     st.success('Done!')
 
     #Add table of averages from simulation run

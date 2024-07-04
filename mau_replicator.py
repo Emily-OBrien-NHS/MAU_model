@@ -53,7 +53,6 @@ class Replicator:
             result_occ = run_output[1]
             occ_res += result_occ
         #Convert results into output dataframes
-        patient_res, occ_res = export_results(self.inputs.scenario_name,
-                                              self.inputs.run_days,
+        patient_res, occ_res = export_results(self.inputs.run_days,
                                               pat_res, occ_res)
         return patient_res, occ_res
