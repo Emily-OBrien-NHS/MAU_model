@@ -1,4 +1,5 @@
 import os
+from stqdm import stqdm
 import math
 import simpy
 import random
@@ -37,16 +38,20 @@ class default_params():
     dta_admit_elsewhere_prob = 0.67
     mau_disc_prob = 0.2
     #Get discharge specialty distributions
-    dis_spec_prob = pd.read_csv('C:/Users/obriene/Projects/MAU model'
-                                '/discharge specialties.csv')
+    #dis_spec_prob = pd.read_csv('C:/Users/obriene/Projects/MAU model'
+     #                           '/discharge specialties.csv')
+    dis_spec_prob = pd.read_csv('discharge specialties.csv')
     dis_spec = dis_spec_prob['local_spec_desc'].tolist()
     dis_prob = dis_spec_prob['count'].tolist()
-    #read in hourly scalars by averages
-    hourly_scalars = pd.read_csv('C:/Users/obriene/Projects/MAU model'
-                           '/hourly average scalars.csv')
+    #read in hourly scalars by averages (have an input and a use table to
+    #preserve the scalars when doing different streamlit runs).
+    #input_hourly_scalars = pd.read_csv('C:/Users/obriene/Projects/MAU model'
+     #                      '/hourly average scalars.csv')
+    input_hourly_scalars = pd.read_csv('hourly average scalars.csv')
+    hourly_scalars = np.nan
     #empty list for results
-    patient_results = []
-    mau_occupancy_results = []
+    #patient_results = []
+    #mau_occupancy_results = []
 
 class spawn_patient:
     def __init__(self, p_id, eu_disc_prob, dta_admit_elsewhere_prob,
@@ -81,6 +86,8 @@ class spawn_patient:
 
 class mau_model:
     def __init__(self, run_number, input_params):
+        self.patient_results = []
+        self.mau_occupancy_results = []
         #start environment and set patient counter to 0 and set run number
         self.env = simpy.Environment()
         self.input_params = input_params
@@ -352,17 +359,19 @@ class mau_model:
     
     ###################RECORD RESULTS####################
     def store_patient_results(self, patient):
-        self.input_params.patient_results.append([self.run_number, patient.id,
-                            patient.arrival, patient.ed_arrival_time,
-                            patient.ed_leave_time, patient.enter_mau_queue,
-                             patient.leave_mau_queue, patient.move_time,
-                            patient.leave_mau, patient.bed_downtime,
-                            patient.note, patient.mau_occ_when_queue_joined,
-                            patient.discharge_specialty])
+        if patient.ed_arrival_time > 0:
+            self.patient_results.append([self.run_number,
+                                patient.id, patient.arrival,
+                                patient.ed_arrival_time, patient.ed_leave_time,
+                                patient.enter_mau_queue, patient.leave_mau_queue,
+                                patient.move_time, patient.leave_mau,
+                                patient.bed_downtime, patient.note,
+                                patient.mau_occ_when_queue_joined,
+                                patient.discharge_specialty])
         
     def store_occupancy(self):
         while True:
-            self.input_params.mau_occupancy_results.append([self.run_number,
+            self.mau_occupancy_results.append([self.run_number,
                                                         self.mau_bed._env.now,
                                                         self.mau_bed.count,
                                                         len(self.mau_bed.queue),
@@ -379,6 +388,7 @@ class mau_model:
         self.env.process(self.generate_non_ed_mau_arrivals())
         self.env.process(self.store_occupancy())
         self.env.run(until=(self.input_params.run_time))
+        return self.patient_results, self.mau_occupancy_results
 
 def export_results(scenario, run_days, pat_res, occ_res):
     #put full patient results into a dataframe
@@ -441,6 +451,7 @@ def log_normal_transform(mean_std):
 
 def transform_inputs(input_params):
     #Transform hourly averges based on the inputs provided
+    input_params.hourly_scalars = input_params.input_hourly_scalars.copy()
     pairs = [('AmbTimeBetweenArrivals', input_params.mean_amb_arr),
             ('WlkinTimeBetweenArrivals',  input_params.mean_wlkin_arr),
             ('Non ED MAU Admissions', input_params.mean_other_mau_arr),
@@ -451,7 +462,7 @@ def transform_inputs(input_params):
             ('mean MAU LoS', input_params.mean_mau),
             ('std MAU LoS', input_params.std_mau)]
     for col, av in pairs:
-        input_params.hourly_scalars[col] = (input_params.hourly_scalars[col]
+        input_params.hourly_scalars[col] = (input_params.input_hourly_scalars[col]
                                             * av)
     #Log transform the hourly averages and std
     log_pairs = [('mean ED LoS', 'std ED LoS'), ('mean move', 'std move'),
@@ -472,7 +483,7 @@ def run_the_model(input_params):
     #transform input parameters for hour of the day
     transform_inputs(input_params)
     #run the model for the number of iterations specified
-    for run in range(input_params.iterations):
+    for run in range(input_params.iterations):#stqdm(range(input_params.iterations), desc='Simulation progress...'):
         print(f"Run {run+1} of {input_params.iterations}")
         model = mau_model(run, input_params)
         model.run()
@@ -481,3 +492,5 @@ def run_the_model(input_params):
                                         input_params.patient_results,
                                         input_params.mau_occupancy_results)
     return patient_df, occ_df
+
+#pat, occ = run_the_model(default_params)

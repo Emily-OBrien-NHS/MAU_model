@@ -1,7 +1,6 @@
 import streamlit as st
-import stqdm
+from stqdm import stqdm
 import os
-os.chdir('C:/Users/obriene/Projects/MAU model')
 from mau_model import default_params
 from mau_model import run_the_model
 from mau_replicator import Replicator
@@ -10,20 +9,9 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 
-#import time
-def log_normal_transform(mu, sigma):
-    #function to take the mean and standard deviation of a series
-    #and convert then into the mu and sigma inputes required
-    #to use a log normal distribution for randomly generating
-    #patient times.
-    input_mu = np.log((mu**2) / ((mu**2 + sigma**2)**0.5))
-    input_sigma = np.log(1 + (sigma**2 / mu**2))**0.5
-    return input_mu, input_sigma
-
-
 st.set_page_config(
-     #page_title="Ex-stream-ly Cool App",
-     #page_icon="🧊",
+     page_title="MAU Model",
+     page_icon="🏥",
      layout="wide",
      initial_sidebar_state="expanded",
      menu_items={
@@ -46,6 +34,10 @@ with st.sidebar:
                                         value=default_params.iterations)
     st.divider()
     st.markdown('# Arrivals')
+    mean_amb_arr = st.slider('Average time between Ambulance ED arrivals',
+                             0, 60, value=default_params.mean_amb_arr)
+    mean_wlkin_arr = st.slider('Average time between walk-in ED arrivals',
+                               0, 60, value=default_params.mean_wlkin_arr)
     mean_other_mau_arr = st.slider('Average time between non ED MAU arrivals',
                                    0, 1000,
                                    value=default_params.mean_other_mau_arr)
@@ -79,13 +71,12 @@ with st.sidebar:
 args = default_params()
 #update defaults to selections
 args.scenario_name = 'streamlit'
+args.mean_amb_arr = mean_amb_arr
+args.mean_wlkin_arr = mean_wlkin_arr
 args.mean_other_mau_arr = mean_other_mau_arr
 args.mean_ed = mean_ed
-args.mu_ed, args.sigma_ed = log_normal_transform(mean_ed, args.std_ed)
 args.mean_move = mean_move
-args.mu_move, args.sigma_move = log_normal_transform(mean_move, args.std_move)
 args.mean_mau = mean_mau
-args.mu_mau, args.sigma_mau = log_normal_transform(mean_mau, args.std_mau)
 args.mau_bed_downtime = mau_bed_downtime
 args.no_mau_beds = no_mau_beds
 args.ed_disc_prob = ed_disc_prob
@@ -108,13 +99,15 @@ if st.button('Run simulation'):
      #   pass
 
     # Run sim
+    st.subheader('Simulation progress:')
     with st.empty():
-        #progress_bar = stqdm(iterations, desc = 'Simulation progress...')
-        pat, occ = run_the_model(args)
+        progress_bar = stqdm(range(iterations), desc='Simulation progress...',
+                             mininterval=1)
+        #pat, occ = run_the_model(args)
 
-        #with st.spinner('Simulating patient arrivals and discharges...'):
-         #   replications = Replicator(args, replications=args.iterations)
-          #  pat, occ = replications.run_scenarios()
+        with st.spinner('Simulating patient arrivals and discharges...'):
+            replications = Replicator(args, replications=args.iterations)
+            pat, occ = replications.run_scenarios()
     st.success('Done!')
 
     #Add table of averages from simulation run
@@ -156,21 +149,8 @@ if st.button('Run simulation'):
     ax.set_xlabel('Time in MAU queue')
     ax.set_ylabel('Frequency')
     st.pyplot(fig)
-
-
-    #Print a table of the input parameters
-    param_table = f'''
-        |Parameter| Value                | Description                                                          |
-        |---|-------------------------|----------------------------------------------------------------------|
-        | Mean non-ED MAU arrivals | {args.mean_other_mau_arr}| Average time between non-ED MAU arrivals |
-        | Average time in ED | {args.mean_ed}   | The average time until DTA in ED        |
-        | Average time in MAU | {args.mean_mau}  | Teh average time spent in MAU     |
-        | MAU bed downtime | {args.mau_bed_downtime}  | The average MAU bed downtime between patients     |
-        | Number of MAU beds | {args.no_mau_beds}  | The number of beds in MAU  |
-        | ED Discharge Probability | {args.ed_disc_prob} | The probability of being discharged from ED  |
-        | Admitted elsewhere probability | {args.dta_admit_elsewhere_prob} | The probability that a patient is admitted somewhere other than MAU  |
-        | MAU Discharge probability | {args.mau_disc_prob} | The probability of being discharged from MAU  |
-        | Simulation run time | {args.run_time // (60*24)} | The simulation run time  |
-        | Simulation iteraitons | {args.iterations} | The number of iterations to run the model for  |
-        '''
-    st.markdown(param_table)
+    #Add table of the discharge specialty counts
+    st.subheader('Average number of patients discharged to each specialty from MAU over run time')
+    disc_spec = (pat['discharge specialty'].value_counts()
+                 / args.iterations).astype(int)
+    st.table(disc_spec.loc[disc_spec > 0])

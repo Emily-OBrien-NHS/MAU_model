@@ -1,15 +1,14 @@
 import os
 from datetime import datetime
-os.chdir('C:/Users/obriene/Projects/MAU model')
 from mau_model import default_params
 from mau_model import run_the_model
 
 inputs = default_params()
 #List of commented out parameters that could be changed
-inputs.scenario_name = 'Baseline 2'
+inputs.scenario_name = 'Baseline'
     #run times and iterations
 #inputs.run_time = 525600
-inputs.iterations = 1
+#inputs.iterations = 10
     #inter arrival times
 #inputs.mean_amb_arr = 18
 #inputs.mean_wlkin_arr = 7
@@ -28,8 +27,7 @@ inputs.iterations = 1
 
 #Create folders for outputs, do data processing and write to csv
 #Create folder for today's runs
-date_folder = (f'C:/Users/obriene/Projects/MAU model/outputs'
-               f'/{datetime.today().strftime('%Y-%m-%d')}')
+date_folder = (f'outputs/{datetime.today().strftime('%Y-%m-%d')}')
 if not os.path.exists(date_folder):
     os.makedirs(date_folder)
 os.chdir(date_folder)
