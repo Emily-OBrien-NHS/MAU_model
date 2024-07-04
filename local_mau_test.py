@@ -8,7 +8,7 @@ inputs = default_params()
 inputs.scenario_name = 'Baseline'
     #run times and iterations
 #inputs.run_time = 525600
-#inputs.iterations = 10
+inputs.iterations = 5
     #inter arrival times
 #inputs.mean_amb_arr = 18
 #inputs.mean_wlkin_arr = 7

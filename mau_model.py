@@ -47,8 +47,8 @@ class default_params():
     input_hourly_scalars = pd.read_csv('hourly average scalars.csv')
     hourly_scalars = np.nan
     #empty list for results
-    pat_results = []
-    occ_results = []
+    pat_res = []
+    occ_res = []
 
 class spawn_patient:
     def __init__(self, p_id, eu_disc_prob, dta_admit_elsewhere_prob,
@@ -391,9 +391,9 @@ class mau_model:
         default_params.occ_res += self.mau_occupancy_results
         return self.patient_results, self.mau_occupancy_results
 
-def export_results(run_days, pat_res, occ_res):
+def export_results(run_days, pat_results, occ_results):
     #put full patient results into a dataframe
-    patient_df = (pd.DataFrame(pat_res,
+    patient_df = (pd.DataFrame(pat_results,
                               columns=['run', 'patient ID', 'ED arrival type',
                                        'ED arrival time', 'ED leave time',
                                        'enter MAU queue', 'leave MAU queue',
@@ -430,7 +430,7 @@ def export_results(run_days, pat_res, occ_res):
                              'discharge specialty']].copy()
 
     #Put occupaion output data into dataframe
-    occ_df = pd.DataFrame(occ_res,
+    occ_df = pd.DataFrame(occ_results,
                               columns=['run', 'time', 'MAU beds occupied',
                                        'MAU queue length', 'ED Occupancy'])
     occ_df['day'] = pd.cut(occ_df['time'], bins=run_days,
@@ -489,8 +489,8 @@ def run_the_model(input_params):
         model = mau_model(run, input_params)
         model.run()
     patient_df, occ_df = export_results(input_params.run_days,
-                                        input_params.patient_results,
-                                        input_params.mau_occupancy_results)
+                                        input_params.pat_res,
+                                        input_params.occ_res)
     return patient_df, occ_df
 
 #pat, occ = run_the_model(default_params)
