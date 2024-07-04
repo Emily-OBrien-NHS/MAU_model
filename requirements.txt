@@ -1,7 +1,6 @@
 numpy
 pandas
 simpy
-math
 stqdm
 matplotlib
 joblib
