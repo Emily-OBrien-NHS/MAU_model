@@ -481,8 +481,8 @@ def run_the_model(input_params):
     #transform input parameters for hour of the day
     transform_inputs(input_params)
     #run the model for the number of iterations specified
-    for run in stqdm(range(input_params.iterations), desc='Simulation progress...'):
-    #for run in range(input_params.iterations):
+    #for run in stqdm(range(input_params.iterations), desc='Simulation progress...'):
+    for run in range(input_params.iterations):
         print(f"Run {run+1} of {input_params.iterations}")
         model = mau_model(run, input_params)
         model.run()
