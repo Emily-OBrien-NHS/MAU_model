@@ -90,17 +90,10 @@ args.mau_occupancy_results = []
 
 #Button to run simulation
 if st.button('Run simulation'):
-    #First delete the previous results
-    #try:
-     #  if pat:
-      #     del pat, occ
-    #except:
-     #   pass
-
-    # Run sim
     st.subheader('Simulation progress:')
     with st.empty():
         t0 = time.time()
+
     #    progress_bar = stqdm(range(iterations), desc='Simulation progress...',
      #                        mininterval=1)
       #  pat, occ = run_the_model(args)
