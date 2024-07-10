@@ -35,15 +35,11 @@ class default_params():
     dta_admit_elsewhere_prob = 0.67
     mau_disc_prob = 0.2
     #Get discharge specialty distributions
-    #dis_spec_prob = pd.read_csv('C:/Users/obriene/Projects/MAU model'
-     #                           '/discharge specialties.csv')
     dis_spec_prob = pd.read_csv('discharge specialties.csv')
     dis_spec = dis_spec_prob['local_spec_desc'].tolist()
     dis_prob = dis_spec_prob['count'].tolist()
     #read in hourly scalars by averages (have an input and a use table to
     #preserve the scalars when doing different streamlit runs).
-    #input_hourly_scalars = pd.read_csv('C:/Users/obriene/Projects/MAU model'
-     #                      '/hourly average scalars.csv')
     input_hourly_scalars = pd.read_csv('hourly average scalars.csv')
     hourly_scalars = np.nan
     #empty list for results
