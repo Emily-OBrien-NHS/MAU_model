@@ -32,12 +32,12 @@ class Replicator:
         occ_results = model.mau_occupancy_results
         return [pat_results, occ_results]
 
-    def run_scenarios(_self):
+    def run_scenarios(self):
         #transform mean and std inputs with user inputs
-        transform_inputs(_self.inputs)
+        transform_inputs(self.inputs)
         # Call for all replications of a single scenario to be run
-        _self.run_trial(_self.inputs)
-        patient_res, occ_res = export_results(_self.inputs.run_days,
-                                              _self.patient_res,
-                                              _self.occupation_res)
+        self.run_trial(self.inputs)
+        patient_res, occ_res = export_results(self.inputs.run_days,
+                                              self.patient_res,
+                                              self.occupation_res)
         return patient_res, occ_res
