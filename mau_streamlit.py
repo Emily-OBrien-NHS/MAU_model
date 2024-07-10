@@ -88,7 +88,7 @@ args.iterations = iterations
 args.patient_results = []
 args.mau_occupancy_results = []
 
-def streamlit_results(pat, occ):
+def streamlit_results(pat, occ, run_time):
     #Add table of averages from simulation run
     st.subheader('Averages of the model run (time in minutes)')
     patient_averages = pat.mean(numeric_only=True).rename('average')
@@ -133,6 +133,7 @@ def streamlit_results(pat, occ):
     disc_spec = (pat['discharge specialty'].value_counts()
                  / args.iterations).astype(int)
     st.table(disc_spec.loc[disc_spec > 0])
+    st.subheader(f'Model run time {run_time} secconds')
 
 #Button to run simulation
 if st.button('Run simulation'):
@@ -145,10 +146,10 @@ if st.button('Run simulation'):
         pat, occ = run_the_model(args)
 
         t1 = time.time()
-        print(t1-t0)
+        run_time = t1-t0
 
     st.success('Done!')
-    streamlit_results(pat, occ)
+    streamlit_results(pat, occ, run_time)
 
 if st.button('Run Multiprocess Simulation'):
     st.subheader('Simulation progress:')
@@ -160,7 +161,7 @@ if st.button('Run Multiprocess Simulation'):
             pat, occ = replications.run_scenarios()
 
         t1 = time.time()
-        print(t1-t0)
+        run_time = t1-t0
 
     st.success('Done!')
-    streamlit_results(pat, occ)
+    streamlit_results(pat, occ, run_time)
