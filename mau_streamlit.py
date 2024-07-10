@@ -94,13 +94,13 @@ if st.button('Run simulation'):
     with st.empty():
         t0 = time.time()
 
-    #    progress_bar = stqdm(range(iterations), desc='Simulation progress...',
-     #                        mininterval=1)
-      #  pat, occ = run_the_model(args)
+        progress_bar = stqdm(range(iterations), desc='Simulation progress...',
+                             mininterval=1)
+        pat, occ = run_the_model(args)
 
-        with st.spinner('Simulating patient arrivals and discharges...'):
-            replications = Replicator(args, replications=args.iterations)
-            pat, occ = replications.run_scenarios()
+    #    with st.spinner('Simulating patient arrivals and discharges...'):
+     #       replications = Replicator(args, replications=args.iterations)
+      #      pat, occ = replications.run_scenarios()
         
         t1 = time.time()
         print(t1-t0)
