@@ -2,7 +2,6 @@ from mau_model import mau_model
 from mau_model import transform_inputs
 from mau_model import export_results
 from concurrent.futures import ProcessPoolExecutor, as_completed
-import streamlit as st
 
 class Replicator:
     def __init__(self, inputs, replications):
@@ -33,7 +32,6 @@ class Replicator:
         occ_results = model.mau_occupancy_results
         return [pat_results, occ_results]
 
-    @st.cache_data
     def run_scenarios(_self):
         #transform mean and std inputs with user inputs
         transform_inputs(_self.inputs)
