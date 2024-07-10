@@ -68,3 +68,6 @@ class Replicator:
                                               self.patient_res,
                                               self.occupation_res)
         return patient_res, occ_res
+
+if __name__ == '__main__':
+    Replicator()
