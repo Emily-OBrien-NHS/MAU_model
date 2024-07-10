@@ -1,9 +1,7 @@
 import streamlit as st
-from stqdm import stqdm
 from mau_model import default_params
 from mau_model import run_the_model
 from mau_replicator import Replicator
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import matplotlib.pyplot as plt
 import pandas as pd
 import time
