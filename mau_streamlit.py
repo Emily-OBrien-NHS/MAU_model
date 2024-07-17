@@ -20,6 +20,11 @@ st.set_page_config(
  )
 
 st.title('MAU Model')
+st.write('''Sliders to adjust input parameters are on the left. 
+         Press Run Multiprocess Simulation to run the model, this is the fastest
+         run time possible, but may cause an error.  If an error does occur,
+         the run model (slow) button should run the model without these erros,
+         but will be much slower.''')
 
 #Put input parameters in a sidebar
 with st.sidebar:
@@ -32,36 +37,43 @@ with st.sidebar:
                                         value=default_params.iterations)
     st.divider()
     st.markdown('# Arrivals')
-    mean_amb_arr = st.slider('Average time between Ambulance ED arrivals',
-                             0, 60, value=default_params.mean_amb_arr)
-    mean_wlkin_arr = st.slider('Average time between walk-in ED arrivals',
-                               0, 60, value=default_params.mean_wlkin_arr)
-    mean_other_mau_arr = st.slider('Average time between non ED MAU arrivals',
-                                   0, 1000,
-                                   value=default_params.mean_other_mau_arr)
+
+    mean_amb_arr = st.slider('Average time between Ambulance ED arrivals (Mins)',
+                            1, 60, value=default_params.mean_amb_arr)
+    st.write(f'{round((60*24)/mean_amb_arr)} ambulance arrivals per day')
     st.divider()
-    st.markdown('# Average stay')
-    mean_ed = st.slider('Average time in ED until DTA',0, 500,
-                                value = default_params.mean_ed)
-    mean_mau = st.slider('Average time in MAU', 0, 3000,
+    mean_wlkin_arr = st.slider('Average time between walk-in ED arrivals (Mins)',
+                            1, 60, value=default_params.mean_wlkin_arr)
+    st.write(f'{round((60*24)/mean_wlkin_arr)} walk-in arrivals per day')
+    st.divider()
+    mean_other_mau_arr = st.slider('Average time between non ED MAU arrivals (Mins)',
+                                1, 1000,
+                                value=default_params.mean_other_mau_arr)
+    st.write(f'{round((60*24)/mean_other_mau_arr, 2)} non-ED MAU arrivals per day')
+
+    st.divider()
+    st.markdown('# Average Stay')
+    mean_ed = st.slider('Average time patient spends in ED until DTA (Mins)', 0,
+                        500, value = default_params.mean_ed)
+    mean_mau = st.slider('Average time patient spends in MAU (Mins)', 0, 3000,
                                 value = default_params.mean_mau)
     st.divider()
-    st.markdown('# patient move and bed downitme')
-    mean_move = st.slider('Average time to move patient into MAU bed',
+    st.markdown('# Patient Move and Bed Downtime')
+    mean_move = st.slider('Average time to move patient into MAU bed (Mins)',
                           10, 60, value = default_params.mean_move)
-    mau_bed_downtime = st.slider('Average MAU bed downtime', 30, 180,
+    mau_bed_downtime = st.slider('Average MAU bed downtime (Mins)', 30, 180,
                                 value = default_params.mau_bed_downtime)
     st.divider()
-    st.markdown('# MAU beds')
+    st.markdown('# MAU Beds')
     no_mau_beds = st.slider('Number of MAU beds', 25, 100,
                                 value = default_params.no_mau_beds)
     st.divider()
-    st.markdown('# Split probabilities')
+    st.markdown('# Split Probabilities')
     ed_disc_prob = st.slider('Proportion discharged from ED', 0.0, 1.0,
                                 value=default_params.ed_disc_prob)
     dta_admit_elsewhere_prob = st.slider('Proportion admitted elsewhere than MAU', 
                                          0.0, 1.0,
-                                         value=default_params.dta_admit_elsewhere_prob)
+                                value=default_params.dta_admit_elsewhere_prob)
     mau_disc_prob = st.slider('Proportion discharged from MAU', 0.0, 1.0,
                                 value = default_params.mau_disc_prob)
 
@@ -92,14 +104,21 @@ def streamlit_results(pat, occ, run_time):
     patient_averages = pat.mean(numeric_only=True).rename('average')
     occ_averages = occ.mean(numeric_only=True).rename('average')
     averages = pd.DataFrame(patient_averages._append(occ_averages)).transpose()
-    averages = averages[['time in ED', 'ED Occupancy', 'time in MAU queue',
-                         'MAU queue length', 'time in MAU',
-                         'MAU beds occupied']].copy()
+    averages['time MAU patients spend in ED'] = (averages['time in ED']
+                                                 + averages['time in MAU queue'])
     averages[['time in ED',
               'time in MAU',
-              'time in MAU queue']] = averages[['time in ED',
+              'time in MAU queue',
+              'time MAU patients spend in ED']] = averages[['time in ED',
                                                 'time in MAU',
-                                                'time in MAU queue']].astype(int)
+                                                'time in MAU queue',
+                                                'time MAU patients spend in ED']].astype(int)
+    averages = averages[['ED Occupancy', 'time in ED', 'time in MAU queue',
+                         'time MAU patients spend in ED',
+                         'MAU queue length', 'time in MAU',
+                         'MAU beds occupied']].copy()
+    averages = averages.rename(columns={'time in ED':'time in ED until DTA'})
+    
     st.dataframe(averages)
 
     #Group up data for plots
@@ -133,33 +152,26 @@ def streamlit_results(pat, occ, run_time):
     st.table(disc_spec.loc[disc_spec > 0])
     st.subheader(f'Model run time {run_time} secconds')
 
-#Button to run simulation
-if st.button('Run simulation'):
-    st.subheader('Simulation progress:')
-    with st.empty():
-        t0 = time.time()
-
-        #progress_bar = stqdm(range(iterations), desc='Simulation progress...',
-         #                    mininterval=1)
-        pat, occ = run_the_model(args)
-
-        t1 = time.time()
-        run_time = t1-t0
-
-    st.success('Done!')
-    streamlit_results(pat, occ, run_time)
-
+#Button to run Multiprocess Simulation
 if st.button('Run Multiprocess Simulation'):
     st.subheader('Simulation progress:')
     with st.empty():
         t0 = time.time()
-
         with st.spinner('Simulating patient arrivals and discharges...'):
             replications = Replicator(args, replications=args.iterations)
             pat, occ = replications.run_scenarios()
-
         t1 = time.time()
         run_time = t1-t0
+    st.success('Done!')
+    streamlit_results(pat, occ, run_time)
 
+#Button to run simulation
+if st.button('Run simulation (slow)'):
+    st.subheader('Simulation progress:')
+    with st.empty():
+        t0 = time.time()
+        pat, occ = run_the_model(args)
+        t1 = time.time()
+        run_time = t1-t0
     st.success('Done!')
     streamlit_results(pat, occ, run_time)
