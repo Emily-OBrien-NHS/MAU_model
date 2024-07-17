@@ -154,7 +154,7 @@ def streamlit_results(pat, occ, run_time):
 
 #Button to run Multiprocess Simulation
 if st.button('Run Multiprocess Simulation'):
-    st.subheader('Simulation progress:')
+    st.subheader('Simulation Progress:')
     with st.empty():
         t0 = time.time()
         with st.spinner('Simulating patient arrivals and discharges...'):
@@ -166,11 +166,12 @@ if st.button('Run Multiprocess Simulation'):
     streamlit_results(pat, occ, run_time)
 
 #Button to run simulation
-if st.button('Run simulation (slow)'):
-    st.subheader('Simulation progress:')
+if st.button('Run Simulation (slow)'):
+    st.subheader('Simulation Progress:')
     with st.empty():
         t0 = time.time()
-        pat, occ = run_the_model(args)
+        with st.spinner('Simulating patient arrivals and discharges...'):
+            pat, occ = run_the_model(args)
         t1 = time.time()
         run_time = t1-t0
     st.success('Done!')
